@@ -14,7 +14,7 @@ struct Observation
 end
 
 struct BeliefState
-    bel_location::Float64
+    bel_location::Tuple{Int64,Int64}
     bel_battery_used::Normal{Float64}
     bel_world_map::Array{Float64,2}
 end
@@ -32,6 +32,7 @@ end
 UAVpomdp() = UAVpomdp(20, trues(20,20),(1,1),(20,20),[s1::LineSensor,s2::CircularSensor], [1.0,1.0,1.0])
 
 # These seem to be needed by POMCP
+# TODO : See if you need discount < 1.0 for POMCP properties
 discount(::UAVpomdp) = 1.0
 isterminal(p::UAVpomdp,s::State) = (s.coords == p.goal_coords);
 
@@ -52,12 +53,12 @@ function generate_o(p::UAVpomdp, s::State, a::Int, sp::State, rng::AbstractRNG)
         # Need each sensor to implement sense method
         # with arguments (true grid, agent coords) and returns the matrix of obs-conf. Will explain
         # This action is a hindsight thing so does not consume energy
+        # TODO : implement sense()
         obs_map = p.sensor_set[a].sense(sp.world_map, sp.location)
 
     return Observation(obs_batt_used,obs_map)
 end
 
-# NEED to be careful here as
 function generate_s(p::UAVpomdp, s::State, a::Int, rng::AbstractRNG)
 
     # Begin by copying over values
@@ -83,12 +84,14 @@ function generate_s(p::UAVpomdp, s::State, a::Int, rng::AbstractRNG)
             new_loc = [s.location[1], s.location[2]]
     else
         # The only change is to battery
-        new_batt -= p.sensor_set[a].consumeEnergy(rng)
+        new_batt += p.sensor_set[a].consumeEnergy(rng)
 
     return State(new_loc,new_batt,new_map)
 
 # One step reward for various situations
 function reward(p::UAVpomdp, s::State, a::Int, sp::State)
+
+    # TODO : Add large positive reward for reaching goal_coords?
 
     # Component 1 - movement
     # 0 if no movement
@@ -103,19 +106,21 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
     # true means no-fly-zone : additional cost
     cost_comp3 = reward_lambdas[3] * (p.true_map[sp.location(1),sp.location(2)])
 
-    reward = -(cost_comp1 + cost_comp2 + cost_comp3)
+    reward = cost_comp1 + cost_comp2 + cost_comp3
 
     return reward
 end
 
-# FILL IN actions and n_actions and enums
+# TODO : Define actions and n_actions and reqd. enums
 
 
 # Initial distribution with belief state
 # Put in some default variables here?
 function initial_belief_state(p::UAVpomdp)
     bel_location = (1,1)
-    bel_batt = 0.0
+    # TODO : Can't have 0.0 std for normal. Shouldn't matter anyway but just
+    # make sure it never gets positive reward for negative battery_used
+    bel_batt = Distributions.Normal(0.0,eps())
     bel_world_map = 0.5*ones(p.map_size,p.map_size)
     bel_world_map[1,1] = 0.0 # 0% chance of NFZ
 end
@@ -138,13 +143,15 @@ function obs_weight(p::UAVpomdp, a::Int, sp::State, o::Observation)
         for i = 1 : p.map_size
             for j = 1 : p.map_size
 
-                if o.obs_world_map[i,j][1] == sp.world_map[i,[1]
+                # TODO : The disagreement will never happen as per our definition - see if that affects anything
+                if o.obs_world_map[i,j][1] == sp.world_map[i,j]
                     logweight += o.obs_world_map[i,j][2]*log(agreement_weight)
                 else
                     logweight -= o.obs_world_map[i,j][2]*log(agreement_weight)
 
         # Now weight according to sensor energy agreement
         # This should return the likelihood of energy usage given the sensor's (mean,variance)
+        # TODO : Implement this 
         logweight += log(sensor_set[action].energyUsageLikelihood(o.obs_battery_used))
 
     return exp(logweight)
