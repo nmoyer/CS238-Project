@@ -28,8 +28,101 @@ type UAVpomdp <: POMDPs.POMDP{State,Int64,Observation}
     reward_lambdas::Array{Float64}
 end
 
+LINE_SENSOR_ENERGY_USE = 2
+LINE_SENSOR_ENERGY_VAR = 0.1
+LINE_SENSOR_LENGTH = 5
+LINE_SENSOR_WIDTH = 1
+LINE_SENSOR_MAX_CONF = 0.7
+
+type LineSensor
+    sense::Function
+    consumeEnergy::Function
+    energyUsageLikelihood::Function
+
+    function LineSensor()
+        instance = new()
+ 
+        instance.sense = function (world_map::Array{Bool,2}, loc::Tuple{Int64,Int64}, 
+                                                             direction::Tuple{Int64, Int64})
+            confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
+            confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
+            observations = [[(false,0) for 1:size(world_map,1)] for 1:size(world_map, 2)]
+            #figure out direction
+            for i = 1:LINE_SENSOR_WIDTH
+                for j = 1:LINE_SENSOR_LENGTH
+                    row = loc[0] + i
+                    col = loc[1] + j
+                    observed_bool = true #placeholder
+                    observations[row][col] = (observed_bool, confidences[j])
+                end
+            end
+        end
+
+        instance.consumeEnergy = function (rng::AbstractRNG)
+            return LINE_SENSOR_ENERGY_USE
+        end
+ 
+        instance.energyUsageLikelihood = function (obs_battery_used::Float64)
+            return Distributions.Normal(LINE_SENSOR_ENERGY_USE,
+                                        LINE_SENSOR_ENERGY_VAR)
+        end
+
+        return instance
+    end
+end
+
+CIRCULAR_SENSOR_ENERGY_USE = 4
+CIRCULAR_SENSOR_ENERGY_VAR = 0.2
+CIRCULAR_SENSOR_RADIUS = 3
+CIRCULAR_SENSOR_MAX_CONF = 0.9
+
+function generate_circle(loc::Tuple{Int64,Int64}, radius::Int64)
+
+end
+
+struct CircularSensor
+    sense::Function
+    consumeEnergy::Function
+    energyUsageLikelihood::Function
+
+    function CircularSensor()
+        instance = new()
+ 
+        instance.sense = function (world_map::Array{Bool,2}, loc::Tuple{Int64,Int64}, 
+                                                             direction::Tuple{Int64, Int64})
+            confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
+            confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
+            observations = [[(false,0) for 1:size(world_map,1)] for 1:size(world_map, 2)]
+            for (row, col, d) in generate_circle(loc, CIRCULAR_SENSOR_RADIUS)
+                observed_bool = true #placeholder
+                observations[row][col] = (observed_bool, confidences[d])
+            end
+        end
+ 
+        instance.consumeEnergy = function (rng::AbstractRNG)
+            return CIRCULAR_SENSOR_ENERGY_USE
+        end
+ 
+        instance.energyUsageLikelihood = function (obs_battery_used::Float64)
+            return Distributions.Normal(CIRCULAR_SENSOR_ENERGY_USE,
+                                        CIRCULAR_SENSOR_ENERGY_VAR)
+        end
+
+        return instance
+    end
+end
+
+#Define actions by ints
+NUM_SENSORS = 2
+NUM_MOVEMENTS = 4
+
+SENSORS = 1:NUM_SENSORS
+MOVEMENTS = NUM_SENSORS+1:NUM_SENSORS+NUM_MOVEMENTS
+
+@enum MOVEMENT_STRING RIGHT=NUM_SENSORS+1 LEFT=NUM_SENSORS+2 UP=NUM_SENSORS+3 DOWN=NUM_SENSORS+4
+
 # Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
-UAVpomdp() = UAVpomdp(20, trues(20,20),(1,1),(20,20),[s1::LineSensor,s2::CircularSensor], [1.0,1.0,1.0])
+UAVpomdp() = UAVpomdp(20, falses(20,20),(1,1),(20,20),[s1::LineSensor,s2::CircularSensor], [1.0,1.0,1.0])
 
 # These seem to be needed by POMCP
 # TODO : See if you need discount < 1.0 for POMCP properties
@@ -67,13 +160,13 @@ function generate_s(p::UAVpomdp, s::State, a::Int, rng::AbstractRNG)
     new_map = s.world_map
 
     if a in MOVEMENTS
-        if a == RIGHT
+        if a == Int(RIGHT)
             # Increase column by one
             new_loc[2] += 1
-        else if a == LEFT
+        else if a == Int(LEFT)
             # Decrease column by one
             new_loc[2] -= 1
-        else if a == UP
+        else if a == Int(UP)
             new_loc[1] -= 1
         else
             new_loc[1] += 1
@@ -110,9 +203,6 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
 
     return reward
 end
-
-# TODO : Define actions and n_actions and reqd. enums
-
 
 # Initial distribution with belief state
 # Put in some default variables here?
