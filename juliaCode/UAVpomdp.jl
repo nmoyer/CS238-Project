@@ -1,11 +1,17 @@
 importall POMDPs
 using ParticleFilters
 using Distributions
+include("Sensors.jl")
+
+#################################
+# Define state and action space #
+#################################
 
 struct State
-    location::Tuple{Int64,Int64} # (row,column)
+    location::Array{Int64,1} # (row,column)
     total_battery_used::Float64
-    world_map::Array{Bool,2}
+    world_map::BitArray{2}
+    direction::Array{Int64,1}
 end
 
 struct Observation
@@ -19,99 +25,6 @@ struct BeliefState
     bel_world_map::Array{Float64,2}
 end
 
-type UAVpomdp <: POMDPs.POMDP{State,Int64,Observation}
-    map_size::Int64
-    true_map::Array{Bool,2}
-    start_coords::Tuple{Int64,Int64}
-    goal_coords::Tuple{Int64,Int64}
-    sensor_set::Array{Sensor}
-    reward_lambdas::Array{Float64}
-end
-
-LINE_SENSOR_ENERGY_USE = 2
-LINE_SENSOR_ENERGY_VAR = 0.1
-LINE_SENSOR_LENGTH = 5
-LINE_SENSOR_WIDTH = 1
-LINE_SENSOR_MAX_CONF = 0.7
-
-type LineSensor
-    sense::Function
-    consumeEnergy::Function
-    energyUsageLikelihood::Function
-
-    function LineSensor()
-        instance = new()
- 
-        instance.sense = function (world_map::Array{Bool,2}, loc::Tuple{Int64,Int64}, 
-                                                             direction::Tuple{Int64, Int64})
-            confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
-            confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
-            observations = [[(false,0) for 1:size(world_map,1)] for 1:size(world_map, 2)]
-            #figure out direction
-            for i = 1:LINE_SENSOR_WIDTH
-                for j = 1:LINE_SENSOR_LENGTH
-                    row = loc[0] + i
-                    col = loc[1] + j
-                    observed_bool = true #placeholder
-                    observations[row][col] = (observed_bool, confidences[j])
-                end
-            end
-        end
-
-        instance.consumeEnergy = function (rng::AbstractRNG)
-            return LINE_SENSOR_ENERGY_USE
-        end
- 
-        instance.energyUsageLikelihood = function (obs_battery_used::Float64)
-            return Distributions.Normal(LINE_SENSOR_ENERGY_USE,
-                                        LINE_SENSOR_ENERGY_VAR)
-        end
-
-        return instance
-    end
-end
-
-CIRCULAR_SENSOR_ENERGY_USE = 4
-CIRCULAR_SENSOR_ENERGY_VAR = 0.2
-CIRCULAR_SENSOR_RADIUS = 3
-CIRCULAR_SENSOR_MAX_CONF = 0.9
-
-function generate_circle(loc::Tuple{Int64,Int64}, radius::Int64)
-
-end
-
-struct CircularSensor
-    sense::Function
-    consumeEnergy::Function
-    energyUsageLikelihood::Function
-
-    function CircularSensor()
-        instance = new()
- 
-        instance.sense = function (world_map::Array{Bool,2}, loc::Tuple{Int64,Int64}, 
-                                                             direction::Tuple{Int64, Int64})
-            confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
-            confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
-            observations = [[(false,0) for 1:size(world_map,1)] for 1:size(world_map, 2)]
-            for (row, col, d) in generate_circle(loc, CIRCULAR_SENSOR_RADIUS)
-                observed_bool = true #placeholder
-                observations[row][col] = (observed_bool, confidences[d])
-            end
-        end
- 
-        instance.consumeEnergy = function (rng::AbstractRNG)
-            return CIRCULAR_SENSOR_ENERGY_USE
-        end
- 
-        instance.energyUsageLikelihood = function (obs_battery_used::Float64)
-            return Distributions.Normal(CIRCULAR_SENSOR_ENERGY_USE,
-                                        CIRCULAR_SENSOR_ENERGY_VAR)
-        end
-
-        return instance
-    end
-end
-
 #Define actions by ints
 NUM_SENSORS = 2
 NUM_MOVEMENTS = 4
@@ -120,14 +33,6 @@ SENSORS = 1:NUM_SENSORS
 MOVEMENTS = NUM_SENSORS+1:NUM_SENSORS+NUM_MOVEMENTS
 
 @enum MOVEMENT_STRING RIGHT=NUM_SENSORS+1 LEFT=NUM_SENSORS+2 UP=NUM_SENSORS+3 DOWN=NUM_SENSORS+4
-
-# Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
-UAVpomdp() = UAVpomdp(20, falses(20,20),(1,1),(20,20),[s1::LineSensor,s2::CircularSensor], [1.0,1.0,1.0])
-
-# These seem to be needed by POMCP
-# TODO : See if you need discount < 1.0 for POMCP properties
-discount(::UAVpomdp) = 1.0
-isterminal(p::UAVpomdp,s::State) = (s.coords == p.goal_coords);
 
 # The observation from a state is just the map of th
 function generate_o(p::UAVpomdp, s::State, a::Int, sp::State, rng::AbstractRNG)
@@ -148,11 +53,12 @@ function generate_o(p::UAVpomdp, s::State, a::Int, sp::State, rng::AbstractRNG)
         # This action is a hindsight thing so does not consume energy
         # TODO : implement sense()
         obs_map = p.sensor_set[a].sense(sp.world_map, sp.location)
+    end
 
     return Observation(obs_batt_used,obs_map)
 end
 
-function generate_s(p::UAVpomdp, s::State, a::Int, rng::AbstractRNG)
+function generate_s(p::Type{UAVpomdp}, s::State, a::Int, rng::MersenneTwister)
 
     # Begin by copying over values
     new_loc = [s.location[1], s.location[2]]
@@ -163,23 +69,26 @@ function generate_s(p::UAVpomdp, s::State, a::Int, rng::AbstractRNG)
         if a == Int(RIGHT)
             # Increase column by one
             new_loc[2] += 1
-        else if a == Int(LEFT)
+        elseif a == Int(LEFT)
             # Decrease column by one
             new_loc[2] -= 1
-        else if a == Int(UP)
+        elseif a == Int(UP)
             new_loc[1] -= 1
         else
             new_loc[1] += 1
+        end
 
-        if new_loc[1] < 1 || new_loc[1] > p.map_size || new_loc[2] < 1 || new_loc[2] > p.map_size:
-
+        if new_loc[1] < 1 || new_loc[1] > p.map_size || new_loc[2] < 1 || new_loc[2] > p.map_size
             # Just set to old location
             new_loc = [s.location[1], s.location[2]]
+        end
     else
         # The only change is to battery
         new_batt += p.sensor_set[a].consumeEnergy(rng)
+    end
 
     return State(new_loc,new_batt,new_map)
+end
 
 # One step reward for various situations
 function reward(p::UAVpomdp, s::State, a::Int, sp::State)
@@ -204,6 +113,27 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
     return reward
 end
 
+###############################################
+# Define POMDP struct and initialize instance #
+###############################################
+
+type UAVpomdp <: POMDPs.POMDP{State,Int64,Observation}
+    map_size::Int64
+    true_map::BitArray{2}
+    start_coords::Array{Int64,1}
+    goal_coords::Array{Int64,1}
+    sensor_set::Array{Sensor,1}
+    reward_lambdas::Array{Float64}
+end
+
+# These seem to be needed by POMCP
+# TODO : See if you need discount < 1.0 for POMCP properties
+discount(::UAVpomdp) = 1.0
+isterminal(p::UAVpomdp,s::State) = (s.coords == p.goal_coords);
+
+# Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
+UAVpomdp() = UAVpomdp(20, falses(20,20),(1,1),(20,20),[s1::LineSensor,s2::CircularSensor], [1.0,1.0,1.0])
+
 # Initial distribution with belief state
 # Put in some default variables here?
 function initial_belief_state(p::UAVpomdp)
@@ -219,7 +149,6 @@ end
 # generate_s will just use the generate_s of the POMDP
 # ParticleFilters - need observation weight function
 # Also need a ParticleGenerator?
-
 function obs_weight(p::UAVpomdp, a::Int, sp::State, o::Observation)
 
     logweight = 0.0
@@ -238,10 +167,14 @@ function obs_weight(p::UAVpomdp, a::Int, sp::State, o::Observation)
                     logweight += o.obs_world_map[i,j][2]*log(agreement_weight)
                 else
                     logweight -= o.obs_world_map[i,j][2]*log(agreement_weight)
-
+                end
+            end
+        end
         # Now weight according to sensor energy agreement
         # This should return the likelihood of energy usage given the sensor's (mean,variance)
         # TODO : Implement this 
         logweight += log(sensor_set[action].energyUsageLikelihood(o.obs_battery_used))
+    end
 
     return exp(logweight)
+end
