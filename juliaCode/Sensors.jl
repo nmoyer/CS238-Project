@@ -7,6 +7,7 @@ abstract type Sensor
 end
 
 LINE_SENSOR_ENERGY_USE = 2
+# TODO Distributions.Normal works with std not variance
 LINE_SENSOR_ENERGY_VAR = 0.1
 LINE_SENSOR_LENGTH = 5
 LINE_SENSOR_WIDTH = 1
@@ -20,14 +21,14 @@ type LineSensor <: Sensor
     function LineSensor()
         instance = new()
  
-        instance.sense = function (world_map::BitArray{2}, loc::Array{Int64,1}, 
-                                   direction::Array{Int64,1})
+        instance.sense = function (world_map::BitArray{2}, loc::Array{Int64,1})
             confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
             confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
 
             obs_map = Array{Tuple{Bool,Float64}}(p.map_size, p.map_size)
             fill!(obs_map,(false,0.0))
 
+            # TODO : Check boundary conditions in array
             for i = 1:LINE_SENSOR_WIDTH
                 for j = 1:LINE_SENSOR_LENGTH
                     row = loc[0] + i
@@ -42,6 +43,7 @@ type LineSensor <: Sensor
             return LINE_SENSOR_ENERGY_USE
         end
  
+        # TODO : Needs to return a value not a distribution
         instance.energyUsageLikelihood = function (obs_battery_used::Float64)
             return Distributions.Normal(LINE_SENSOR_ENERGY_USE,
                                         LINE_SENSOR_ENERGY_VAR)
@@ -99,8 +101,7 @@ struct CircularSensor <: Sensor
     function CircularSensor()
         instance = new()
  
-        instance.sense = function (world_map::BitArray{2}, loc::Array{Int64,1}, 
-                                   direction::Array{Int64,1})
+        instance.sense = function (world_map::BitArray{2}, loc::Array{Int64,1})
             confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
             confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
           

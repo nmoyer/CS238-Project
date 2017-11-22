@@ -7,21 +7,22 @@ include("Sensors.jl")
 # Define state and action space #
 #################################
 
+# TODO : Work with StaticArrays for location?
 struct State
     location::Array{Int64,1} # (row,column)
     total_battery_used::Float64
     world_map::BitArray{2}
-    direction::Array{Int64,1}
 end
 
 struct Observation
+    obs_location::Array{Int64,1}
     obs_battery_used::Float64
     obs_world_map::Array{Tuple{Bool,Float64},2}
 end
 
 struct BeliefState
-    bel_location::Tuple{Int64,Int64}
-    bel_battery_used::Normal{Float64}
+    bel_location::Array{Int64,1}
+    bel_battery_used::Tuple{Float64,Float64}
     bel_world_map::Array{Float64,2}
 end
 
@@ -37,6 +38,7 @@ MOVEMENTS = NUM_SENSORS+1:NUM_SENSORS+NUM_MOVEMENTS
 # The observation from a state is just the map of th
 function generate_o(p::UAVpomdp, s::State, a::Int, sp::State, rng::AbstractRNG)
     
+    obs_loc = sp.location
     obs_batt_used = sp.total_battery_used - s.total_battery_used
     obs_map = Array{Tuple{Bool,Float64}}(p.map_size, p.map_size)
 
@@ -55,7 +57,7 @@ function generate_o(p::UAVpomdp, s::State, a::Int, sp::State, rng::AbstractRNG)
         obs_map = p.sensor_set[a].sense(sp.world_map, sp.location)
     end
 
-    return Observation(obs_batt_used,obs_map)
+    return Observation(obs_loc,obs_batt_used,obs_map)
 end
 
 function generate_s(p::Type{UAVpomdp}, s::State, a::Int, rng::MersenneTwister)
@@ -108,7 +110,7 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
     # true means no-fly-zone : additional cost
     cost_comp3 = reward_lambdas[3] * (p.true_map[sp.location(1),sp.location(2)])
 
-    reward = cost_comp1 + cost_comp2 + cost_comp3
+    reward = -(cost_comp1 + cost_comp2 + cost_comp3)
 
     return reward
 end
@@ -132,15 +134,16 @@ discount(::UAVpomdp) = 1.0
 isterminal(p::UAVpomdp,s::State) = (s.coords == p.goal_coords);
 
 # Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
+# TODO : Cost of NFZ should be HIGH to encourage sensor usage
 UAVpomdp() = UAVpomdp(20, falses(20,20),(1,1),(20,20),[s1::LineSensor,s2::CircularSensor], [1.0,1.0,1.0])
 
 # Initial distribution with belief state
 # Put in some default variables here?
 function initial_belief_state(p::UAVpomdp)
-    bel_location = (1,1)
+    bel_location = [1,1]
     # TODO : Can't have 0.0 std for normal. Shouldn't matter anyway but just
     # make sure it never gets positive reward for negative battery_used
-    bel_batt = Distributions.Normal(0.0,eps())
+    bel_batt = (0.0,eps())
     bel_world_map = 0.5*ones(p.map_size,p.map_size)
     bel_world_map[1,1] = 0.0 # 0% chance of NFZ
 end
@@ -178,3 +181,69 @@ function obs_weight(p::UAVpomdp, a::Int, sp::State, o::Observation)
 
     return exp(logweight)
 end
+
+
+# The explicit belief updated to be used by the outer Loop
+function update_belief(p::UAVpomdp,b::BeliefState,a::Int,o::Observation)
+
+    # New belief location is just the observed location
+    # Initialize battery dist with old normal
+    # Initialize obs_map with old map
+    new_bel_loc = o.obs_location
+    new_batt_used = b.bel_battery_used
+    new_bel_map = b.bel_world_map
+
+    # If action is movement, only the 
+    # bel_map for the new cell changes
+    if a in MOVEMENTS
+        # Implicit conversion from bool to double
+        new_bel_map[o.obs_location[1],o.obs_location[2]] = o.obs_world_map[o.obs_location[1],o.obs_location[2]]
+    else
+        # Action is a sensor usage
+        # Update battery gaussians
+        # TODO - make mean and std of energy directly accessible as tuple of floats
+        sensor_mean_std = p.sensor_set[a].energyMeanSTD()
+        new_batt_used = (b.bel_battery_used[1] + sensor_mean_std[1] , sqrt(b.bel_battery_used[2]^2 + sensor_mean_std[2]^2))
+
+
+        # Now update grid
+        for i = 1 : p.map_size
+            for j = 1 : p.map_size
+
+                if o.obs_world_map[i,j][2] > 0.0
+                    confval = 0.0
+                    weightcoeff = 1.0 #TODO - This weights the new observation vs current
+                    
+                    # Do a weighted sum of old and new estimates
+                    if o.obs_world_map[i,j][1] == true
+                        confval = (b.bel_world_map[i,j] + 1.0*weightcoeff)/(1.0 + o.obs_world_map[i,j][2]*weightcoeff)
+                    else
+                        confval = (b.bel_world_map[i,j])/(1.0 + o.obs_world_map[i,j][2]*weightcoeff)
+                    
+                    new_bel_map[i,j] = confval
+
+    return BeliefState(new_bel_loc, new_batt_used, new_bel_map)
+
+
+
+# A sampler for the belief state
+function rand(rng::AbstractRNG, b::BeliefState)
+
+    state_loc = [b.bel_location[1], b.bel_location[2]]
+    state_bat = rand(rng,b.bel_battery_used)
+
+    # Now initialize grid
+    # Sample a random number for each cell and assign cell state based on result
+    state_map = BitArray{2}(p.map_size,p.map_size)
+    for i = 1 : p.map_size
+        for j = 1 : p.map_size
+
+            randval = rand(rng)
+            if randval < b.bel_world_map[i,j]
+                state_map[i,j] = true
+            else
+                state_map[i,j] = false
+
+    return State(state_loc,state_bat,state_map)
+
+
