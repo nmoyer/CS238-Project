@@ -21,7 +21,7 @@ type LineSensor <: Sensor
     function LineSensor()
         instance = new()
  
-        instance.sense = function (world_map::BitArray{2}, loc::Array{Int64,1})
+        instance.sense = function (world_map::BitArray, loc::Array{Int64,1})
             confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
             confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
 
@@ -101,7 +101,7 @@ struct CircularSensor <: Sensor
     function CircularSensor()
         instance = new()
  
-        instance.sense = function (world_map::BitArray{2}, loc::Array{Int64,1})
+        instance.sense = function (world_map::BitArray, loc::Array{Int64,1})
             confidence_stepsize = LINE_SENSOR_MAX_CONF/LINE_SENSOR_LENGTH
             confidences = LINE_SENSOR_MAX_CONF:0:-confidence_stepsize
           

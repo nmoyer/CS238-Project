@@ -11,7 +11,7 @@ include("Sensors.jl")
 struct State
     location::Array{Int64,1} # (row,column)
     total_battery_used::Float64
-    world_map::BitArray{2}
+    world_map::BitArray
 end
 
 struct Observation
