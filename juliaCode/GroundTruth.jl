@@ -217,49 +217,49 @@ function get_action(belief_state::BeliefState, prev_action::Int64, policy_type::
     end
 end
 
-###############
-# Main script #
-###############
+# ###############
+# # Main script #
+# ###############
 
-sim = SimulatorState(40,100)
+# sim = SimulatorState(40,100)
 
-rng = Base.Random.MersenneTwister(1237)
-initial_map = initialize_map(40, 0.3, rng)
-state = State([1,1], 0.0, initial_map)
-visited_states = [(state.location[1],state.location[2])]
-belief_state = initial_belief_state(pomdp)
+# rng = Base.Random.MersenneTwister(1237)
+# initial_map = initialize_map(40, 0.3, rng)
+# state = State([1,1], 0.0, initial_map)
+# visited_states = [(state.location[1],state.location[2])]
+# belief_state = initial_belief_state(pomdp)
 
-first_update_simulator(sim, state)
+# first_update_simulator(sim, state)
 
-total_reward = 0
-action = Int(RIGHT)
+# total_reward = 0
+# action = Int(RIGHT)
 
-n = 1
-while true
-	update_simulator(sim, state, belief_state)
+# n = 1
+# while true
+# 	update_simulator(sim, state, belief_state)
     
-    action = get_action(belief_state, action, "greedy_safe")
+#     action = get_action(belief_state, action, "greedy_safe")
 
-    new_state = generate_s(pomdp, state, action, rng)
-    push!(visited_states,(new_state.location[1],new_state.location[2]))
+#     new_state = generate_s(pomdp, state, action, rng)
+#     push!(visited_states,(new_state.location[1],new_state.location[2]))
 
-    total_reward += reward(pomdp, state, action, new_state)
+#     total_reward += reward(pomdp, state, action, new_state)
 
-    obs = generate_o(pomdp, state, action, new_state, rng)
-    belief_state = update_belief(pomdp, belief_state, action, obs)
+#     obs = generate_o(pomdp, state, action, new_state, rng)
+#     belief_state = update_belief(pomdp, belief_state, action, obs)
 
-    state = new_state
+#     state = new_state
 
-    if isterminal(pomdp, state)
-        update_simulator(sim, state, belief_state)
-        break
-    end
+#     if isterminal(pomdp, state)
+#         update_simulator(sim, state, belief_state)
+#         break
+#     end
 
-    n += 1
-end 
+#     n += 1
+# end 
 
-print("Final score:")
-print(total_reward)
-print("\n")
+# print("Final score:")
+# print(total_reward)
+# print("\n")
 
-freeze_simulator(sim)
+# freeze_simulator(sim)
