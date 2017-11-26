@@ -1,5 +1,5 @@
 importall POMDPs
-using ParticleFilters
+using ParticleFilters, POMCPOW
 using Distributions
 include("Sensors.jl")
 

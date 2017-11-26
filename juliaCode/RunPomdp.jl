@@ -1,4 +1,4 @@
-using MCTS, BasicPOMCP
+using MCTS, BasicPOMCP, POMCPOW
 include("GroundTruth.jl")
 
 ###############
@@ -13,7 +13,7 @@ sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1
 lambdas = [0.0,0.0,10000.0]
 pomdp = UAVpomdp(GRID_SIZE, falses(GRID_SIZE,GRID_SIZE), [1,1], [GRID_SIZE,GRID_SIZE], sensors, lambdas)
 
-solver = POMCPSolver(tree_queries=10000)
+solver = POMCPOWSolver(tree_queries=1000)
 policy = solve(solver, pomdp);
 
 sim = SimulatorState(GRID_SIZE,100)
