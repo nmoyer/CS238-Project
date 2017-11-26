@@ -1,35 +1,42 @@
+using MCTS, BasicPOMCP
 include("GroundTruth.jl")
 
 ###############
 # Main script #
 ###############
 
-sim = SimulatorState(40,100)
+GRID_SIZE = 10
 
-rng = Base.Random.MersenneTwister(1237)
-initial_map = initialize_map(40, 0.3, rng)
+# Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
+# TODO : Cost of NFZ should be HIGH to encourage sensor usage
+sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
+lambdas = [0.0,0.0,10000.0]
+pomdp = UAVpomdp(GRID_SIZE, falses(GRID_SIZE,GRID_SIZE), [1,1], [GRID_SIZE,GRID_SIZE], sensors, lambdas)
+
+solver = POMCPSolver(tree_queries=10000)
+policy = solve(solver, pomdp);
+
+sim = SimulatorState(GRID_SIZE,100)
+rng = Base.Random.MersenneTwister(1233)
+
+initial_map = initialize_map(GRID_SIZE, 0.3, rng)
 state = State([1,1], 0.0, initial_map)
-visited_states = [(state.location[1],state.location[2])]
 belief_state = initial_belief_state(pomdp)
 
 first_update_simulator(sim, state)
 
 total_reward = 0
-action = Int(RIGHT)
-
 n = 1
+
 while true
     update_simulator(sim, state, belief_state)
     
-    action = get_action(belief_state, action, "greedy_safe")
+    a = action(policy, belief_state) 
 
-    new_state = generate_s(pomdp, state, action, rng)
-    push!(visited_states,(new_state.location[1],new_state.location[2]))
-
-    total_reward += reward(pomdp, state, action, new_state)
-
-    obs = generate_o(pomdp, state, action, new_state, rng)
-    belief_state = update_belief(pomdp, belief_state, action, obs)
+    new_state = generate_s(pomdp, state, a, rng)
+    total_reward += reward(pomdp, state, a, new_state)
+    obs = generate_o(pomdp, state, a, new_state, rng)
+    belief_state = update_belief(pomdp, belief_state, a, obs)
 
     state = new_state
 

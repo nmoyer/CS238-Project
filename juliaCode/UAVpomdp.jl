@@ -94,7 +94,7 @@ function generate_s(p::UAVpomdp, s::State, a::Int, rng::MersenneTwister)
             # Just set to old location
             new_loc = [s.location[1], s.location[2]]
         end
-        #new_batt += 1
+        new_batt += 1
     else
         # The only change is to battery
         new_batt += p.sensor_set[a].consumeEnergy(rng)
@@ -113,6 +113,17 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
     manhattan_distance = abs(s.location[1] - sp.location[1]) + abs(s.location[2]-sp.location[2])
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
+    # if manhattan_distance == 0 && a in MOVEMENTS
+    #     cost_comp1 = p.reward_lambdas[1]
+    # end
+    if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
+        cost_comp1 = 100
+    end
+
+    goal_loc = p.goal_coords
+    goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
+    cost_comp1 += p.reward_lambdas[1] * goal_l1_dist
+
     # Component 2 - one-step energy usage
     # 0 if no sensing action done
     cost_comp2 = p.reward_lambdas[2] * (sp.total_battery_used - s.total_battery_used)
@@ -122,6 +133,10 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
     cost_comp3 = p.reward_lambdas[3] * (p.true_map[sp.location[1],sp.location[2]])
 
     reward = -(cost_comp1 + cost_comp2 + cost_comp3)
+
+    if isterminal(p, sp)
+        reward += 1000.0
+    end
 
     return reward
 end
@@ -142,12 +157,14 @@ end
 # These seem to be needed by POMCP
 # TODO : See if you need discount < 1.0 for POMCP properties
 discount(::UAVpomdp) = 1.0
-isterminal(p::UAVpomdp,s::State) = (s.location == p.goal_coords || s.total_battery_used >= 100);
+isterminal(p::UAVpomdp,s::State) = (s.location == p.goal_coords)# || s.total_battery_used >= 100);
+actions(p::UAVpomdp) = 1:NUM_SENSORS+NUM_MOVEMENTS
+n_actions(p::UAVpomdp) = NUM_SENSORS+NUM_MOVEMENTS
 
 # Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
 # TODO : Cost of NFZ should be HIGH to encourage sensor usage
-sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
-pomdp = UAVpomdp(40, falses(40,40), [1,1], [40,40], sensors, [1.0,1.0,1.0])
+# sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
+# pomdp = UAVpomdp(40, falses(40,40), [1,1], [40,40], sensors, [1.0,1.0,1.0])
 
 # Initial distribution with belief state
 # Put in some default variables here?
@@ -265,12 +282,13 @@ function rand(rng::AbstractRNG, b::BeliefState)
 
     state_loc = [b.bel_location[1], b.bel_location[2]]
     state_bat = rand(rng,b.bel_battery_used)
+    map_size = size(b.bel_world_map,1)
 
     # Now initialize grid
     # Sample a random number for each cell and assign cell state based on result
-    state_map = BitArray{2}(p.map_size,p.map_size)
-    for i = 1 : p.map_size
-        for j = 1 : p.map_size
+    state_map = BitArray{2}(map_size,map_size)
+    for i = 1 : map_size
+        for j = 1 : map_size
 
             randval = rand(rng)
             if randval < b.bel_world_map[i,j]

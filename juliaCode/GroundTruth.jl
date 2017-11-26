@@ -20,7 +20,7 @@ struct SimulatorState
         grid_tile_size = 15
 
         adj_canvas_size = grid_world_size*grid_tile_size
-        battery_canvas_space = Int(adj_canvas_size/20)*4
+        battery_canvas_space = Int(floor(adj_canvas_size/20))*4
         final_width = 2*adj_canvas_size+battery_canvas_space
 
         canvas = tk.Canvas(tk_root, width=final_width, height=adj_canvas_size)
@@ -90,15 +90,14 @@ function update_simulator(sim::SimulatorState, state::State, belief_state::Belie
             canvas[:itemconfig](canvas_belief_grid[row][col], fill=get_color(tile_belief))
         end
     end
-    print("\n")
 
     aircraft_row, aircraft_col = location
     canvas[:itemconfig](canvas_true_grid[aircraft_row][aircraft_col], fill="blue")
     canvas[:itemconfig](canvas_belief_grid[aircraft_row][aircraft_col], fill="blue")
 
-    for level = 0:total_battery_used
-        canvas[:itemconfig](canvas_battery[Int(level)+1], fill="white")
-    end
+    # for level = 0:total_battery_used
+    #     canvas[:itemconfig](canvas_battery[Int(level)+1], fill="white")
+    # end
 
     tk_root[:update]()
 end
