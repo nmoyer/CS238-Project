@@ -38,16 +38,16 @@ struct SimulatorState
                         for col in 1:grid_tile_size:adj_canvas_size] 
                         for row in 1:grid_tile_size:adj_canvas_size]
 
-        battery_canvas_start = 2*adj_canvas_size + 2*Int(floor(battery_canvas_space/3)) 
-        battery_canvas_end = 2*adj_canvas_size + 3*Int(floor(battery_canvas_space/3))
-        battery_tile_size = Int(floor(adj_canvas_size/100))
+        # battery_canvas_start = 2*adj_canvas_size + 2*Int(floor(battery_canvas_space/3)) 
+        # battery_canvas_end = 2*adj_canvas_size + 3*Int(floor(battery_canvas_space/3))
+        # battery_tile_size = Int(floor(adj_canvas_size/100))
 
-        canvas_battery = [canvas[:create_rectangle](battery_canvas_start,row,
-                                                    battery_canvas_end,
-                                                    row+battery_tile_size, fill="green") 
-                          for row in 0:battery_tile_size:adj_canvas_size]
+        # canvas_battery = [canvas[:create_rectangle](battery_canvas_start,row,
+        #                                             battery_canvas_end,
+        #                                             row+battery_tile_size, fill="green") 
+        #                   for row in 0:battery_tile_size:adj_canvas_size]
 
-        return new(tk_root, canvas, canvas_true_grid, canvas_belief_grid, canvas_battery)
+        return new(tk_root, canvas, canvas_true_grid, canvas_belief_grid)#, canvas_battery)
     end
 end
 
@@ -100,6 +100,7 @@ function update_simulator(sim::SimulatorState, state::State, belief_state::Belie
     # end
 
     tk_root[:update]()
+    #sleep(.5)
 end
 
 function freeze_simulator(sim::SimulatorState)

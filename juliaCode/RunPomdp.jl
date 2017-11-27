@@ -1,26 +1,27 @@
-using MCTS, BasicPOMCP, POMCPOW
+using MCTS, BasicPOMCP#, POMCPOW
 include("GroundTruth.jl")
 
 ###############
 # Main script #
 ###############
 
-GRID_SIZE = 10
+GRID_SIZE = 15
 
 # Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
 # TODO : Cost of NFZ should be HIGH to encourage sensor usage
 sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
-lambdas = [0.0,0.0,10000.0]
+lambdas = [1.0,1.0,15.0]
 pomdp = UAVpomdp(GRID_SIZE, falses(GRID_SIZE,GRID_SIZE), [1,1], [GRID_SIZE,GRID_SIZE], sensors, lambdas)
 
-solver = POMCPOWSolver(tree_queries=1000)
+solver = POMCPSolver(tree_queries=1000, max_depth=30)
 policy = solve(solver, pomdp);
 
 sim = SimulatorState(GRID_SIZE,100)
-rng = Base.Random.MersenneTwister(1233)
+rng = Base.Random.MersenneTwister(1245)
 
 initial_map = initialize_map(GRID_SIZE, 0.3, rng)
 state = State([1,1], 0.0, initial_map)
+pomdp.true_map = initial_map
 belief_state = initial_belief_state(pomdp)
 
 first_update_simulator(sim, state)
@@ -29,9 +30,19 @@ total_reward = 0
 n = 1
 
 while true
-    update_simulator(sim, state, belief_state)
+    #update_simulator(sim, state, belief_state)
+
+    a = action(policy, belief_state)    
     
-    a = action(policy, belief_state) 
+    # if rand(rng,Float64) < 0.5
+    #     a = 5 
+    # else
+    #     if rand(rng,Float64) < 0.5
+    #         a = Int(DOWN)
+    #     else
+    #         a = Int(RIGHT)
+    #     end
+    # end
 
     new_state = generate_s(pomdp, state, a, rng)
     total_reward += reward(pomdp, state, a, new_state)

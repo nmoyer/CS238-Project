@@ -113,16 +113,18 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
     manhattan_distance = abs(s.location[1] - sp.location[1]) + abs(s.location[2]-sp.location[2])
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
-    # if manhattan_distance == 0 && a in MOVEMENTS
-    #     cost_comp1 = p.reward_lambdas[1]
-    # end
+    if manhattan_distance == 0 && a in MOVEMENTS
+        cost_comp1 = p.reward_lambdas[1]
+    end
+
     if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
-        cost_comp1 = 100
+        cost_comp1 += 100
     end
 
     goal_loc = p.goal_coords
     goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
-    cost_comp1 += p.reward_lambdas[1] * goal_l1_dist
+    
+    cost_comp1 += 1.5*p.reward_lambdas[1] * goal_l1_dist
 
     # Component 2 - one-step energy usage
     # 0 if no sensing action done
@@ -130,7 +132,7 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
 
     # Component 3 - If in no-fly-zone
     # true means no-fly-zone : additional cost
-    cost_comp3 = p.reward_lambdas[3] * (p.true_map[sp.location[1],sp.location[2]])
+    cost_comp3 = p.reward_lambdas[3] * Int(p.true_map[sp.location[1],sp.location[2]])
 
     reward = -(cost_comp1 + cost_comp2 + cost_comp3)
 
@@ -264,9 +266,9 @@ function update_belief(p::UAVpomdp, b::BeliefState, a::Int, o::Observation)
                         bottom = top + (1.0 - o.obs_world_map[i,j][2])*(1.0 - b.bel_world_map[i,j])
                         new_bel_map[i,j] = top ./ bottom
                     else
-                        top = o.obs_world_map[i,j][2]*(1.0 - b.bel_world_map[i,j])
-                        bottom = top + (1.0 - o.obs_world_map[i,j][2])*b.bel_world_map[i,j]
-                        new_bel_map[i,j] = 1 - (top ./ bottom) #1 - top ./ bottom
+                        top = (1-o.obs_world_map[i,j][2])*b.bel_world_map[i,j]
+                        bottom = top + o.obs_world_map[i,j][2]*(1-b.bel_world_map[i,j])
+                        new_bel_map[i,j] = top ./ bottom #1 - top ./ bottom
                     end
                 end
             end
