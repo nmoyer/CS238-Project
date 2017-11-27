@@ -1,7 +1,10 @@
 using MCTS, BasicPOMCP#, POMCPOW
 include("GroundTruth.jl")
 
-function run_iteration(sim, state, belief_state, )
+function run_iteration(grid_size)
+
+
+end 
 
 ###############
 # Main script #

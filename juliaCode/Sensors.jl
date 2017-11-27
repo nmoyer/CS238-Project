@@ -77,7 +77,7 @@ type LineSensor <: Sensor
         energyUsageLikelihood = function (obs_battery_used::Float64)
             distribution = Normal(LINE_SENSOR_ENERGY_USE,
                                   LINE_SENSOR_ENERGY_SD)
-            return rand(distribution, 1)
+            return pdf(distribution,obs_battery_used)
         end
 
         energySpec = (LINE_SENSOR_ENERGY_USE, LINE_SENSOR_ENERGY_SD)
@@ -165,7 +165,7 @@ type CircularSensor <: Sensor
         energyUsageLikelihood = function (obs_battery_used::Float64)
             distribution = Normal(CIRCULAR_SENSOR_ENERGY_USE,
                                   CIRCULAR_SENSOR_ENERGY_SD)
-            return rand(distribution, 1)
+            return pdf(distribution,obs_battery_used)
         end
 
         energySpec = (CIRCULAR_SENSOR_ENERGY_USE, CIRCULAR_SENSOR_ENERGY_SD)
