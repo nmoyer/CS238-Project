@@ -1,6 +1,8 @@
 using MCTS, BasicPOMCP#, POMCPOW
 include("GroundTruth.jl")
 
+function run_iteration(sim, state, belief_state, )
+
 ###############
 # Main script #
 ###############
@@ -16,7 +18,7 @@ pomdp = UAVpomdp(GRID_SIZE, falses(GRID_SIZE,GRID_SIZE), [1,1], [GRID_SIZE,GRID_
 solver = POMCPSolver(tree_queries=1000, max_depth=30)
 policy = solve(solver, pomdp);
 
-sim = SimulatorState(GRID_SIZE,100)
+sim = SimulatorState(GRID_SIZE,0)
 rng = Base.Random.MersenneTwister(1245)
 
 initial_map = initialize_map(GRID_SIZE, 0.3, rng)
@@ -30,19 +32,9 @@ total_reward = 0
 n = 1
 
 while true
-    #update_simulator(sim, state, belief_state)
+    update_simulator(sim, state, belief_state)
 
     a = action(policy, belief_state)    
-    
-    # if rand(rng,Float64) < 0.5
-    #     a = 5 
-    # else
-    #     if rand(rng,Float64) < 0.5
-    #         a = Int(DOWN)
-    #     else
-    #         a = Int(RIGHT)
-    #     end
-    # end
 
     new_state = generate_s(pomdp, state, a, rng)
     total_reward += reward(pomdp, state, a, new_state)

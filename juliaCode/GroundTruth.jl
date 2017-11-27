@@ -40,7 +40,7 @@ struct SimulatorState
 
         # battery_canvas_start = 2*adj_canvas_size + 2*Int(floor(battery_canvas_space/3)) 
         # battery_canvas_end = 2*adj_canvas_size + 3*Int(floor(battery_canvas_space/3))
-        # battery_tile_size = Int(floor(adj_canvas_size/100))
+        # battery_tile_size = Int(floor(adj_canvas_size/total_battery))
 
         # canvas_battery = [canvas[:create_rectangle](battery_canvas_start,row,
         #                                             battery_canvas_end,
@@ -257,6 +257,16 @@ end
 
 #     n += 1
 # end 
+
+    # if rand(rng,Float64) < 0.5
+    #     a = 5 
+    # else
+    #     if rand(rng,Float64) < 0.5
+    #         a = Int(DOWN)
+    #     else
+    #         a = Int(RIGHT)
+    #     end
+    # end
 
 # print("Final score:")
 # print(total_reward)
