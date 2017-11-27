@@ -45,7 +45,7 @@ MOVEMENTS = NUM_SENSORS+1:NUM_SENSORS+NUM_MOVEMENTS
 @enum MOVEMENT_STRING RIGHT=NUM_SENSORS+1 LEFT=NUM_SENSORS+2 UP=NUM_SENSORS+3 DOWN=NUM_SENSORS+4
 
 # The observation from a state is just the map of th
-function generate_o(p::UAVpomdp, s::State, a::Int, sp::State, rng::MersenneTwister)
+function generate_o(p::UAVpomdp, s::State, a::Int64, sp::State, rng::MersenneTwister)
     
     obs_loc = sp.location
     obs_batt_used = sp.total_battery_used - s.total_battery_used
@@ -69,7 +69,7 @@ function generate_o(p::UAVpomdp, s::State, a::Int, sp::State, rng::MersenneTwist
     return Observation(obs_loc,obs_batt_used,obs_map)
 end
 
-function generate_s(p::UAVpomdp, s::State, a::Int, rng::MersenneTwister)
+function generate_s(p::UAVpomdp, s::State, a::Int64, rng::MersenneTwister)
 
     map_size = size(s.world_map,1)
     # Begin by copying over values
@@ -104,7 +104,7 @@ function generate_s(p::UAVpomdp, s::State, a::Int, rng::MersenneTwister)
 end
 
 # One step reward for various situations
-function reward(p::UAVpomdp, s::State, a::Int, sp::State)
+function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
 
     # TODO : Add large positive reward for reaching goal_coords?
 
@@ -113,16 +113,13 @@ function reward(p::UAVpomdp, s::State, a::Int, sp::State)
     manhattan_distance = abs(s.location[1] - sp.location[1]) + abs(s.location[2]-sp.location[2])
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
-    # if manhattan_distance == 0 && a in MOVEMENTS
-    #     cost_comp1 = p.reward_lambdas[1]
-    # end
     if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
-        cost_comp1 = 100
+        cost_comp1 = p.reward_lambdas[1] * 10.0
     end
 
     goal_loc = p.goal_coords
     goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
-    cost_comp1 += p.reward_lambdas[1] * goal_l1_dist
+    cost_comp1 += (p.reward_lambdas[1]/10.0) * goal_l1_dist
 
     # Component 2 - one-step energy usage
     # 0 if no sensing action done
@@ -188,14 +185,14 @@ end
 # generate_s will just use the generate_s of the POMDP
 # ParticleFilters - need observation weight function
 # Also need a ParticleGenerator?
-function obs_weight(p::UAVpomdp, a::Int, sp::State, o::Observation)
+function ParticleFilters.obs_weight(p::UAVpomdp, s::State, a::Int64, sp::State, o::Observation)
 
     logweight = 0.0
     #agreement_weight = 5.0
 
     # If movement only check that cell of current location is equal to true
     if a in MOVEMENTS
-        logweight += log(p.world_map[sp.location[1], sp.location[2]] == o.obs_world_map[sp.location[1], sp.location[2]][1])
+        logweight += log(p.true_map[sp.location[1], sp.location[2]] == o.obs_world_map[sp.location[1], sp.location[2]][1])
     else
         # Loop through cells and update weight based on sensor agreement
         for i = 1 : p.map_size
@@ -216,14 +213,14 @@ function obs_weight(p::UAVpomdp, a::Int, sp::State, o::Observation)
             end
         end
 
-        logweight += log(sensor_set[action].energyUsageLikelihood(o.obs_battery_used))
+        logweight += log(p.sensor_set[a].energyUsageLikelihood(o.obs_battery_used))
     end
 
     return exp(logweight)
 end
 
 # The explicit belief updated to be used by the outer Loop
-function update_belief(p::UAVpomdp, b::BeliefState, a::Int, o::Observation)
+function update_belief(p::UAVpomdp, b::BeliefState, a::Int64, o::Observation)
 
     # New belief location is just the observed location
     # Initialize battery dist with old normal
