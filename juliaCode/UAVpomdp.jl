@@ -113,27 +113,18 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     manhattan_distance = abs(s.location[1] - sp.location[1]) + abs(s.location[2]-sp.location[2])
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
-<<<<<<< HEAD
     if manhattan_distance == 0 && a in MOVEMENTS
         cost_comp1 = p.reward_lambdas[1]
     end
 
     if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
-        cost_comp1 += 100
-=======
-    if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
         cost_comp1 = p.reward_lambdas[1] * 10.0
->>>>>>> 3064de21eb0c64fd7ce7e7d214b1bc3659c74a51
     end
 
     goal_loc = p.goal_coords
     goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
-<<<<<<< HEAD
     
     cost_comp1 += 1.5*p.reward_lambdas[1] * goal_l1_dist
-=======
-    cost_comp1 += (p.reward_lambdas[1]/10.0) * goal_l1_dist
->>>>>>> 3064de21eb0c64fd7ce7e7d214b1bc3659c74a51
 
     # Component 2 - one-step energy usage
     # 0 if no sensing action done

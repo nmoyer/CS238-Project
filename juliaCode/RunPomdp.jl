@@ -1,61 +1,90 @@
 using MCTS, BasicPOMCP#, POMCPOW
 include("GroundTruth.jl")
 
-function run_iteration(grid_size)
+function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
+    rng = Base.Random.MersenneTwister(seed)
 
-end 
+    initial_map = initialize_map(GRID_SIZE, PERCENT_OBSTRUCT, rng)
+    pomdp = UAVpomdp(GRID_SIZE, initial_map, START_LOC, END_LOC, sensors, lambdas)
+    policy = solve(solver, pomdp)
+    belief_state = initial_belief_state(pomdp)
+    state = State(START_LOC, START_BATTERY, initial_map)
 
-###############
-# Main script #
-###############
-
-GRID_SIZE = 15
-
-# Default parameters: map_size is 20 x 20; true_map is all cells true and true_battery_left is 100
-# TODO : Cost of NFZ should be HIGH to encourage sensor usage
-sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
-lambdas = [1.0,1.0,15.0]
-pomdp = UAVpomdp(GRID_SIZE, falses(GRID_SIZE,GRID_SIZE), [1,1], [GRID_SIZE,GRID_SIZE], sensors, lambdas)
-
-solver = POMCPSolver(tree_queries=1000, max_depth=30)
-policy = solve(solver, pomdp);
-
-sim = SimulatorState(GRID_SIZE,0)
-rng = Base.Random.MersenneTwister(1245)
-
-initial_map = initialize_map(GRID_SIZE, 0.3, rng)
-state = State([1,1], 0.0, initial_map)
-pomdp.true_map = initial_map
-belief_state = initial_belief_state(pomdp)
-
-first_update_simulator(sim, state)
-
-total_reward = 0
-n = 1
-
-while true
-    update_simulator(sim, state, belief_state)
-
-    a = action(policy, belief_state)    
-
-    new_state = generate_s(pomdp, state, a, rng)
-    total_reward += reward(pomdp, state, a, new_state)
-    obs = generate_o(pomdp, state, a, new_state, rng)
-    belief_state = update_belief(pomdp, belief_state, a, obs)
-
-    state = new_state
-
-    if isterminal(pomdp, state)
-        update_simulator(sim, state, belief_state)
-        break
+    if !suppress_sim
+        first_update_simulator(sim, state)
     end
 
-    n += 1
+    total_reward = 0
+    while true
+        if !suppress_sim
+            update_simulator(sim, state, belief_state)
+        end
+
+        a = action(policy, belief_state) 
+        new_state = generate_s(pomdp, state, a, rng)
+        total_reward += reward(pomdp, state, a, new_state)
+        obs = generate_o(pomdp, state, a, new_state, rng)
+        belief_state = update_belief(pomdp, belief_state, a, obs)
+        state = new_state
+
+        if isterminal(pomdp, state)
+            if !suppress_sim
+                update_simulator(sim, state, belief_state)
+            end 
+
+            break
+        end
+    end
+
+    return total_reward
 end 
 
-print("Final score:")
-print(total_reward)
-print("\n")
+function run_trials(sim, solver, sensors, lambdas, num_trials, suppress_sim)
 
-freeze_simulator(sim)
+    all_rewards = 0.0
+    for seed in 1:num_trials
+        all_rewards += run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
+    end
+    average_reward = all_rewards ./ num_trials
+
+    print("Average reward: "*string(average_reward)*"\n")
+
+    if !suppress_sim
+        freeze_simulator(sim)
+    end
+end
+
+####################
+# INPUT PARAMETERS #
+####################
+
+GRID_SIZE = 15
+PERCENT_OBSTRUCT = 0.3
+
+START_LOC = [1,1]
+END_LOC = [GRID_SIZE, GRID_SIZE]
+START_BATTERY = 0.0
+
+MOVEMENT_LAMBDA = 1.0
+SENSOR_LAMBDA = 1.0
+NFZ_LAMBDA = 15.0
+
+SUPPRESS_SIM = true
+
+if !SUPPRESS_SIM
+    sim = SimulatorState(GRID_SIZE,0)
+else
+    sim = 0
+end
+
+sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
+lambdas = [MOVEMENT_LAMBDA, SENSOR_LAMBDA, NFZ_LAMBDA]
+
+TREE_QUERIES = 1000
+
+solver = POMCPSolver(tree_queries=TREE_QUERIES)
+
+NUM_TRIALS = 3
+
+run_trials(sim, solver, sensors, lambdas, NUM_TRIALS, SUPPRESS_SIM)
