@@ -1,6 +1,8 @@
 using MCTS, BasicPOMCP#, POMCPOW
 include("GroundTruth.jl")
 
+# @ NateM : The solver here will be the ARDESPOT object that you create in the outer level
+#           You probably do not need to touch the other arguments
 function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
     rng = Base.Random.MersenneTwister(seed)
@@ -48,6 +50,8 @@ function run_trials(sim, solver, sensors, lambdas, num_trials, suppress_sim)
     end
     average_reward = all_rewards ./ num_trials
 
+    # @ Nate M : Depending on what works for you, you might want to print to a file here
+    #            So it is easier to accumulate results later
     print("Average reward: "*string(average_reward)*"\n")
 
     if !suppress_sim
@@ -66,6 +70,8 @@ START_LOC = [1,1]
 END_LOC = [GRID_SIZE, GRID_SIZE]
 START_BATTERY = 0.0
 
+# @ Nate M : Feel free to play around with the cost lambdas, although finally we should all
+#            use the same set, so keep us informed if you are making radical changes
 MOVEMENT_LAMBDA = 1.0
 SENSOR_LAMBDA = 1.0
 NFZ_LAMBDA = 15.0
@@ -83,6 +89,7 @@ lambdas = [MOVEMENT_LAMBDA, SENSOR_LAMBDA, NFZ_LAMBDA]
 
 TREE_QUERIES = 1000
 
+# @ Nate M : Of course you will define a different solver here (ARDESPOT)
 solver = POMCPSolver(tree_queries=TREE_QUERIES)
 
 NUM_TRIALS = 3
