@@ -7,7 +7,7 @@ include("GroundTruth.jl")
 function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
     rng = Base.Random.MersenneTwister(seed)
-    solver = POMCPSolver(tree_queries=TREE_QUERIES,c=1.0, max_depth=10, rng=rng)
+    solver = POMCPSolver(tree_queries=TREE_QUERIES,c=C, max_depth=MAX_DEPTH, rng=rng)
 
     const initial_map = initialize_map(GRID_SIZE, PERCENT_OBSTRUCT, rng)
     const pomdp = UAVpomdp(GRID_SIZE, initial_map, START_LOC, END_LOC, sensors, lambdas)
@@ -84,10 +84,10 @@ const END_LOC = [GRID_SIZE, GRID_SIZE]
 const START_BATTERY = 0.0
 
 const MOVEMENT_LAMBDA = 1.0
-const HEURISTIC_LAMBDA = 500.0
+const HEURISTIC_LAMBDA = 2.0
 const SENSOR_LAMBDA = 2.0
-const NFZ_LAMBDA = 15.0
-const SUCCESS_LAMBDA = 1000.0
+const NFZ_LAMBDA = 20.0
+const SUCCESS_LAMBDA = 10000.0
 
 const SUPPRESS_SIM = false
 
@@ -101,11 +101,13 @@ const sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSens
 const lambdas = [MOVEMENT_LAMBDA, HEURISTIC_LAMBDA, SENSOR_LAMBDA, NFZ_LAMBDA, SUCCESS_LAMBDA]
 
 const TREE_QUERIES = 1000
+const C = 1.0
+const MAX_DEPTH = 40
 
-solver = POMCPSolver(tree_queries=TREE_QUERIES,c=0.1, max_depth=40)
+solver = POMCPSolver(tree_queries=TREE_QUERIES,c=C, max_depth=MAX_DEPTH)
 
-const NUM_TRIALS = 1
-const START_SEED = 11
+const NUM_TRIALS = 3
+const START_SEED = 19
 
 #Base.Profile.init
 

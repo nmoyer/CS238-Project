@@ -118,11 +118,14 @@ function make_cluster(world_map::BitArray{2}, rng::MersenneTwister)
     const cluster_height = 1
     const cluster_width = 1
 
-    row_start = Base.Random.rand(rng, 1:(size(world_map,1)-cluster_height))
-    col_start = Base.Random.rand(rng, 1:(size(world_map,2)-cluster_width))
+    row_start = Base.Random.rand(rng, -cluster_height:size(world_map,1))
+    col_start = Base.Random.rand(rng, -cluster_width:size(world_map,2))
 
     for row = row_start:row_start+cluster_height
         for col = col_start:col_start+cluster_width
+            if row > size(world_map,1) || row <= 0 || col > size(world_map,2) || col <= 0
+                continue
+            end
             world_map[row,col] = true
         end
     end
@@ -159,19 +162,19 @@ end
 
 function cost_of_naive(p::UAVpomdp)
     total_cost = 0
-    for i = 1:(p.map_size-1)
-        hor_row = 1
-        hor_col = i+1
-        vert_row = i
-        vert_col = p.map_size
+    for i = 1:p.map_size
+        row1 = i
+        col1 = i
+        row2 = i
+        col2 = i+1
 
         total_cost -= 2*p.reward_lambdas[1]
         
-        if p.true_map[hor_row, hor_col]
-            total_cost -= NFZ_cost = p.reward_lambdas[4]
+        if p.true_map[row1, col1] && i != 1
+            total_cost -= p.reward_lambdas[4]
         end 
-        if p.true_map[vert_row, vert_col]
-            total_cost -= NFZ_cost = p.reward_lambdas[4]
+        if i != p.map_size && p.true_map[row2, col2]
+            total_cost -= p.reward_lambdas[4]
         end
 
         total_cost

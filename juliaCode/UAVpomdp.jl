@@ -152,7 +152,7 @@ function reward_no_heuristic(p::UAVpomdp, s::State, a::Int64, sp::State)
     reward = -(cost_comp1 + cost_comp2 + cost_comp3)
 
     if isterminal(p, sp)
-        reward += 1000.0
+        reward += p.reward_lambdas[5]
     end
 
     return reward
