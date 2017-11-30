@@ -76,7 +76,7 @@ end
 # INPUT PARAMETERS #
 ####################
 
-const GRID_SIZE = 50
+const GRID_SIZE = 20
 const PERCENT_OBSTRUCT = 0.4
 
 const START_LOC = [1,1]
@@ -102,7 +102,7 @@ const lambdas = [MOVEMENT_LAMBDA, HEURISTIC_LAMBDA, SENSOR_LAMBDA, NFZ_LAMBDA, S
 
 const TREE_QUERIES = 1000
 
-solver = POMCPSolver(tree_queries=TREE_QUERIES,c=1.0, max_depth=40)
+solver = POMCPSolver(tree_queries=TREE_QUERIES,c=0.1, max_depth=40)
 
 const NUM_TRIALS = 1
 const START_SEED = 11

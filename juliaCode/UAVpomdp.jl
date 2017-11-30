@@ -119,7 +119,7 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     goal_loc = p.goal_coords
     goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
     
-    reward = p.reward_lambdas[2] * (1 ./ goal_l1_dist)
+    cost_comp1 += p.reward_lambdas[2] * goal_l1_dist
 
     # Component 2 - one-step energy usage
     # 0 if no sensing action done
@@ -129,7 +129,7 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     # true means no-fly-zone : additional cost
     cost_comp3 = p.reward_lambdas[4] * Int(p.true_map[sp.location[1],sp.location[2]])
 
-    reward += -(cost_comp1 + cost_comp2 + cost_comp3)
+    reward = -(cost_comp1 + cost_comp2 + cost_comp3)
 
     if isterminal(p, sp)
         reward += p.reward_lambdas[5]
