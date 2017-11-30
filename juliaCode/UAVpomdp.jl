@@ -36,11 +36,11 @@ type UAVpomdp <: POMDPs.POMDP{State,Int64,Observation}
 end
 
 #Define actions by ints
-NUM_SENSORS = 5
-NUM_MOVEMENTS = 4
+const NUM_SENSORS = 5
+const NUM_MOVEMENTS = 4
 
-SENSORS = 1:NUM_SENSORS
-MOVEMENTS = NUM_SENSORS+1:NUM_SENSORS+NUM_MOVEMENTS
+const SENSORS = 1:NUM_SENSORS
+const MOVEMENTS = NUM_SENSORS+1:NUM_SENSORS+NUM_MOVEMENTS
 
 @enum MOVEMENT_STRING RIGHT=NUM_SENSORS+1 LEFT=NUM_SENSORS+2 UP=NUM_SENSORS+3 DOWN=NUM_SENSORS+4
 
@@ -49,20 +49,15 @@ function generate_o(p::UAVpomdp, s::State, a::Int64, sp::State, rng::MersenneTwi
     
     obs_loc = sp.location
     obs_batt_used = sp.total_battery_used - s.total_battery_used
-    obs_map = Array{Tuple{Bool,Float64}}(p.map_size, p.map_size)
-
-    fill!(obs_map,(false,0.5))
 
     # Should have an enum set for movements and sensors
     if a in MOVEMENTS
         # Just observe current cell with full conf
+        obs_map = Array{Tuple{Bool,Float64}}(p.map_size, p.map_size)
+        fill!(obs_map,(false,0.5))
+
         obs_map[sp.location[1],sp.location[2]] = ( sp.world_map[sp.location[1],sp.location[2]], 1.0 )
     else
-        # action is in SENSORS
-        # Need each sensor to implement sense method
-        # with arguments (true grid, agent coords) and returns the matrix of obs-conf. Will explain
-        # This action is a hindsight thing so does not consume energy
-        # TODO : implement sense()
         obs_map = p.sensor_set[a].sense(sp.world_map, sp.location, rng)
     end
 
@@ -114,26 +109,46 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
     if manhattan_distance == 0 && a in MOVEMENTS
-        cost_comp1 = p.reward_lambdas[1]
+        cost_comp1 = p.reward_lambdas[4]
     end
 
-    if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
-        cost_comp1 = p.reward_lambdas[1] * 10.0
-    end
+    # if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
+    #     cost_comp1 = p.reward_lambdas[1] * 10.0
+    # end
 
     goal_loc = p.goal_coords
     goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
     
-    cost_comp1 += 1.5*p.reward_lambdas[1] * goal_l1_dist
+    reward = p.reward_lambdas[2] * (1 ./ goal_l1_dist)
 
     # Component 2 - one-step energy usage
     # 0 if no sensing action done
-    cost_comp2 = p.reward_lambdas[2] * (sp.total_battery_used - s.total_battery_used)
+    cost_comp2 = p.reward_lambdas[3] * (sp.total_battery_used - s.total_battery_used)
 
     # Component 3 - If in no-fly-zone
     # true means no-fly-zone : additional cost
-    cost_comp3 = p.reward_lambdas[3] * Int(p.true_map[sp.location[1],sp.location[2]])
+    cost_comp3 = p.reward_lambdas[4] * Int(p.true_map[sp.location[1],sp.location[2]])
 
+    reward += -(cost_comp1 + cost_comp2 + cost_comp3)
+
+    if isterminal(p, sp)
+        reward += p.reward_lambdas[5]
+    end
+
+    return reward
+end
+
+function reward_no_heuristic(p::UAVpomdp, s::State, a::Int64, sp::State)
+
+    manhattan_distance = abs(s.location[1] - sp.location[1]) + abs(s.location[2]-sp.location[2])
+    cost_comp1 = p.reward_lambdas[1] * manhattan_distance
+
+    if manhattan_distance == 0 && a in MOVEMENTS
+        cost_comp1 = p.reward_lambdas[1]
+    end
+
+    cost_comp2 = p.reward_lambdas[2] * (sp.total_battery_used - s.total_battery_used)
+    cost_comp3 = p.reward_lambdas[3] * Int(p.true_map[sp.location[1],sp.location[2]])
     reward = -(cost_comp1 + cost_comp2 + cost_comp3)
 
     if isterminal(p, sp)
@@ -141,7 +156,7 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     end
 
     return reward
-end
+end 
 
 ###############################################
 # Define POMDP struct and initialize instance #
@@ -232,7 +247,7 @@ function update_belief(p::UAVpomdp, b::BeliefState, a::Int64, o::Observation)
     # Initialize obs_map with old map
     new_bel_loc = o.obs_location
     new_batt_used = b.bel_battery_used
-    new_bel_map = deepcopy(b.bel_world_map)
+    new_bel_map = b.bel_world_map
 
     # If action is movement, only the 
     # bel_map for the new cell changes
@@ -284,7 +299,7 @@ function rand(rng::AbstractRNG, b::BeliefState)
 
     state_loc = [b.bel_location[1], b.bel_location[2]]
     state_bat = rand(rng,b.bel_battery_used)
-    map_size = size(b.bel_world_map,1)
+    const map_size = size(b.bel_world_map,1)
 
     # Now initialize grid
     # Sample a random number for each cell and assign cell state based on result

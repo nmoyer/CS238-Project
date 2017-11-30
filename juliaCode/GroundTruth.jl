@@ -115,8 +115,8 @@ end
 ########################
 
 function make_cluster(world_map::BitArray{2}, rng::MersenneTwister)
-    cluster_height = 2
-    cluster_width = 2
+    const cluster_height = 1
+    const cluster_width = 1
 
     row_start = Base.Random.rand(rng, 1:(size(world_map,1)-cluster_height))
     col_start = Base.Random.rand(rng, 1:(size(world_map,2)-cluster_width))
@@ -155,6 +155,31 @@ function get_color(tile_belief::Float64)
 
     gray_num = Int(floor(100 - tile_belief*100))
     return "gray" * string(gray_num)
+end
+
+function cost_of_naive(p::UAVpomdp)
+    total_cost = 0
+    for i = 1:(p.map_size-1)
+        hor_row = 1
+        hor_col = i+1
+        vert_row = i
+        vert_col = p.map_size
+
+        total_cost -= 2*p.reward_lambdas[1]
+        
+        if p.true_map[hor_row, hor_col]
+            total_cost -= NFZ_cost = p.reward_lambdas[4]
+        end 
+        if p.true_map[vert_row, vert_col]
+            total_cost -= NFZ_cost = p.reward_lambdas[4]
+        end
+
+        total_cost
+    end
+
+    total_cost += p.reward_lambdas[5]
+
+    return total_cost
 end
 
 function get_action(belief_state::BeliefState, prev_action::Int64, policy_type::String)

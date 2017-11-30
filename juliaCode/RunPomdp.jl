@@ -1,12 +1,17 @@
 using MCTS, BasicPOMCP#, POMCPOW
+using Base.Profile
 include("GroundTruth.jl")
 
 function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
     rng = Base.Random.MersenneTwister(seed)
+    solver = POMCPSolver(tree_queries=TREE_QUERIES,c=1.0, max_depth=10, rng=rng)
 
-    initial_map = initialize_map(GRID_SIZE, PERCENT_OBSTRUCT, rng)
-    pomdp = UAVpomdp(GRID_SIZE, initial_map, START_LOC, END_LOC, sensors, lambdas)
+    const initial_map = initialize_map(GRID_SIZE, PERCENT_OBSTRUCT, rng)
+    const pomdp = UAVpomdp(GRID_SIZE, initial_map, START_LOC, END_LOC, sensors, lambdas)
+    
+    const naive_cost = cost_of_naive(pomdp)
+
     policy = solve(solver, pomdp)
     belief_state = initial_belief_state(pomdp)
     state = State(START_LOC, START_BATTERY, initial_map)
@@ -16,14 +21,19 @@ function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
     end
 
     total_reward = 0
-    while true
+    iteration = 0
+    while iteration < 200
         if !suppress_sim
             update_simulator(sim, state, belief_state)
         end
 
+        #print(state.location)
         a = action(policy, belief_state) 
+        print(string(a)*"\n")
+        #print(iteration)
+        
         new_state = generate_s(pomdp, state, a, rng)
-        total_reward += reward(pomdp, state, a, new_state)
+        total_reward += reward_no_heuristic(pomdp, state, a, new_state)
         obs = generate_o(pomdp, state, a, new_state, rng)
         belief_state = update_belief(pomdp, belief_state, a, obs)
         state = new_state
@@ -35,16 +45,19 @@ function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
             break
         end
+
+        iteration += 1
     end
 
-    return total_reward
+    print(total_reward - naive_cost)
+    return total_reward - naive_cost
 end 
 
-function run_trials(sim, solver, sensors, lambdas, num_trials, suppress_sim)
+function run_trials(sim, solver, sensors, lambdas, num_trials, suppress_sim, start_seed)
 
     all_rewards = 0.0
-    for seed in 1:num_trials
-        all_rewards += run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
+    for seed in start_seed:start_seed + (num_trials-1)
+        all_rewards += @time run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
     end
     average_reward = all_rewards ./ num_trials
 
@@ -59,18 +72,20 @@ end
 # INPUT PARAMETERS #
 ####################
 
-GRID_SIZE = 15
-PERCENT_OBSTRUCT = 0.3
+const GRID_SIZE = 50
+const PERCENT_OBSTRUCT = 0.4
 
-START_LOC = [1,1]
-END_LOC = [GRID_SIZE, GRID_SIZE]
-START_BATTERY = 0.0
+const START_LOC = [1,1]
+const END_LOC = [GRID_SIZE, GRID_SIZE]
+const START_BATTERY = 0.0
 
-MOVEMENT_LAMBDA = 1.0
-SENSOR_LAMBDA = 1.0
-NFZ_LAMBDA = 15.0
+const MOVEMENT_LAMBDA = 1.0
+const HEURISTIC_LAMBDA = 500.0
+const SENSOR_LAMBDA = 2.0
+const NFZ_LAMBDA = 15.0
+const SUCCESS_LAMBDA = 1000.0
 
-SUPPRESS_SIM = true
+const SUPPRESS_SIM = false
 
 if !SUPPRESS_SIM
     sim = SimulatorState(GRID_SIZE,0)
@@ -78,13 +93,18 @@ else
     sim = 0
 end
 
-sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
-lambdas = [MOVEMENT_LAMBDA, SENSOR_LAMBDA, NFZ_LAMBDA]
+const sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
+const lambdas = [MOVEMENT_LAMBDA, HEURISTIC_LAMBDA, SENSOR_LAMBDA, NFZ_LAMBDA, SUCCESS_LAMBDA]
 
-TREE_QUERIES = 1000
+const TREE_QUERIES = 1000
 
-solver = POMCPSolver(tree_queries=TREE_QUERIES)
+solver = POMCPSolver(tree_queries=TREE_QUERIES,c=1.0, max_depth=40)
 
-NUM_TRIALS = 3
+const NUM_TRIALS = 1
+const START_SEED = 11
 
-run_trials(sim, solver, sensors, lambdas, NUM_TRIALS, SUPPRESS_SIM)
+#Base.Profile.init
+
+run_trials(sim, solver, sensors, lambdas, NUM_TRIALS, SUPPRESS_SIM, START_SEED)
+
+#Base.Profile.print()

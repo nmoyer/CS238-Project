@@ -11,11 +11,11 @@ end
 abstract type Sensor
 end
 
-LINE_SENSOR_ENERGY_USE = 1
-LINE_SENSOR_ENERGY_SD = 0.1
-LINE_SENSOR_LENGTH = 10
-LINE_SENSOR_WIDTH = 1
-LINE_SENSOR_MAX_CONF = 0.9
+const LINE_SENSOR_ENERGY_USE = 1
+const LINE_SENSOR_ENERGY_SD = 0.1
+const LINE_SENSOR_LENGTH = 10
+const LINE_SENSOR_WIDTH = 1
+const LINE_SENSOR_MAX_CONF = 1.0
 
 function generate_line(line_start::Array{Int64,1}, len::Int64, direction::Array{Int64,1}, 
                        map_len::Int64)
@@ -49,8 +49,8 @@ type LineSensor <: Sensor
     function LineSensor(direction::Array{Int64,1})
         sense = function (world_map::BitArray, loc::Array{Int64,1}, rng::MersenneTwister)
             map_size = size(world_map, 1)
-            confidence_stepsize = (LINE_SENSOR_MAX_CONF-0.5)/LINE_SENSOR_LENGTH
-            confidences = LINE_SENSOR_MAX_CONF:-confidence_stepsize:0.5
+            confidence_stepsize = (LINE_SENSOR_MAX_CONF-0.99)/LINE_SENSOR_LENGTH
+            confidences = LINE_SENSOR_MAX_CONF:-confidence_stepsize:0.99
 
             obs_map = Array{Tuple{Bool,Float64}}(map_size, map_size)
             fill!(obs_map,(false,0.0))
@@ -85,12 +85,12 @@ type LineSensor <: Sensor
     end
 end
 
-CIRCULAR_SENSOR_ENERGY_USE = 1
-CIRCULAR_SENSOR_ENERGY_SD = 0.2
-CIRCULAR_SENSOR_RADIUS = 4
-CIRCULAR_SENSOR_MAX_CONF = 1.0
+const CIRCULAR_SENSOR_ENERGY_USE = 1
+const CIRCULAR_SENSOR_ENERGY_SD = 0.2
+const CIRCULAR_SENSOR_RADIUS = 4
+const CIRCULAR_SENSOR_MAX_CONF = 1.0
 
-CIRCULAR_OFFSETS = Dict(1 => [[0, 1], [1, 0], [0, -1], [-1, 0]],
+const CIRCULAR_OFFSETS = Dict(1 => [[0, 1], [1, 0], [0, -1], [-1, 0]],
                         2 => [[0, 2], [1, 1], [0, 0], [-1, 1], 
                               [2, 0], [1, -1], [0, 0], [0, -2], 
                               [-1, -1], [-2, 0]], 
@@ -137,8 +137,8 @@ type CircularSensor <: Sensor
     function CircularSensor()
         sense = function (world_map::BitArray, loc::Array{Int64,1}, rng::MersenneTwister)
             map_size = size(world_map, 1)
-            confidence_stepsize = (CIRCULAR_SENSOR_MAX_CONF-0.7)/CIRCULAR_SENSOR_RADIUS
-            confidences = CIRCULAR_SENSOR_MAX_CONF:-confidence_stepsize:0.7
+            confidence_stepsize = (CIRCULAR_SENSOR_MAX_CONF-0.99)/CIRCULAR_SENSOR_RADIUS
+            confidences = CIRCULAR_SENSOR_MAX_CONF:-confidence_stepsize:0.99
 
             obs_map = Array{Tuple{Bool,Float64}}(map_size, map_size)
             fill!(obs_map,(false,0.5))
