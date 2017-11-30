@@ -2,6 +2,8 @@ using MCTS, BasicPOMCP#, POMCPOW
 using Base.Profile
 include("GroundTruth.jl")
 
+# @ NateM : The solver here will be the ARDESPOT object that you create in the outer level
+#           You probably do not need to touch the other arguments
 function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
     rng = Base.Random.MersenneTwister(seed)
@@ -61,6 +63,8 @@ function run_trials(sim, solver, sensors, lambdas, num_trials, suppress_sim, sta
     end
     average_reward = all_rewards ./ num_trials
 
+    # @ Nate M : Depending on what works for you, you might want to print to a file here
+    #            So it is easier to accumulate results later
     print("Average reward: "*string(average_reward)*"\n")
 
     if !suppress_sim
