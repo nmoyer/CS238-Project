@@ -93,6 +93,9 @@ function generate_s(p::UAVpomdp, s::State, a::Int64, rng::MersenneTwister)
     else
         # The only change is to battery
         new_batt += p.sensor_set[a].consumeEnergy(rng)
+
+        # Make changes in bel_map
+        
     end
 
     return State(new_loc,new_batt,new_map)
@@ -109,13 +112,10 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
     if manhattan_distance == 0 && a in MOVEMENTS
-        cost_comp1 = p.reward_lambdas[4]
+        cost_comp1 = p.reward_lambdas[1]
     end
 
-    # if sp.location[1] == 0 || sp.location[1] > p.map_size || sp.location[2] == 0 || sp.location[2] > p.map_size
-    #     cost_comp1 = p.reward_lambdas[1] * 10.0
-    # end
-
+    # Distance to goal heuristic
     goal_loc = p.goal_coords
     goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
     
@@ -125,9 +125,11 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     # 0 if no sensing action done
     cost_comp2 = p.reward_lambdas[3] * (sp.total_battery_used - s.total_battery_used)
 
+
     # Component 3 - If in no-fly-zone
     # true means no-fly-zone : additional cost
-    cost_comp3 = p.reward_lambdas[4] * Int(p.true_map[sp.location[1],sp.location[2]])
+    cost_comp3 = p.reward_lambdas[4] * Int(sp.world_map[sp.location[1],sp.location[2]])
+
 
     reward = -(cost_comp1 + cost_comp2 + cost_comp3)
 
@@ -144,15 +146,15 @@ function reward_no_heuristic(p::UAVpomdp, s::State, a::Int64, sp::State)
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
     if manhattan_distance == 0 && a in MOVEMENTS
-        cost_comp1 = p.reward_lambdas[1]
+        cost_comp1 = p.reward_lambdas[4]
     end
 
-    cost_comp2 = p.reward_lambdas[2] * (sp.total_battery_used - s.total_battery_used)
-    cost_comp3 = p.reward_lambdas[3] * Int(p.true_map[sp.location[1],sp.location[2]])
+    cost_comp2 = p.reward_lambdas[3] * (sp.total_battery_used - s.total_battery_used)
+    cost_comp3 = p.reward_lambdas[4] * Int(p.true_map[sp.location[1],sp.location[2]])
     reward = -(cost_comp1 + cost_comp2 + cost_comp3)
 
     if isterminal(p, sp)
-        reward += 1000.0
+        reward += p.reward_lambdas[5]
     end
 
     return reward
