@@ -13,6 +13,8 @@ function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
     const pomdp = UAVpomdp(GRID_SIZE, initial_map, START_LOC, END_LOC, sensors, lambdas)
     
     const naive_cost = cost_of_naive(pomdp)
+    const oracle_cost = cost_of_oracle(pomdp)
+    print(string(oracle_cost)*"\n")
 
     policy = solve(solver, pomdp)
     belief_state = initial_belief_state(pomdp)
@@ -31,7 +33,6 @@ function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
         #print(state.location)
         a = action(policy, belief_state) 
-        print(string(a)*"\n")
         #print(iteration)
         
         new_state = generate_s(pomdp, state, a, rng)
@@ -76,8 +77,8 @@ end
 # INPUT PARAMETERS #
 ####################
 
-const GRID_SIZE = 20
-const PERCENT_OBSTRUCT = 0.4
+const GRID_SIZE = 15
+const PERCENT_OBSTRUCT = 0.9
 
 const START_LOC = [1,1]
 const END_LOC = [GRID_SIZE, GRID_SIZE]
@@ -87,7 +88,7 @@ const MOVEMENT_LAMBDA = 1.0
 const HEURISTIC_LAMBDA = 2.0
 const SENSOR_LAMBDA = 2.0
 const NFZ_LAMBDA = 20.0
-const SUCCESS_LAMBDA = 10000.0
+const SUCCESS_LAMBDA = 1000.0
 
 const SUPPRESS_SIM = false
 
@@ -106,8 +107,8 @@ const MAX_DEPTH = 40
 
 solver = POMCPSolver(tree_queries=TREE_QUERIES,c=C, max_depth=MAX_DEPTH)
 
-const NUM_TRIALS = 3
-const START_SEED = 19
+const NUM_TRIALS = 1
+const START_SEED = 20
 
 #Base.Profile.init
 

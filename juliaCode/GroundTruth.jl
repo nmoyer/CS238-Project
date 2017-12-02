@@ -1,4 +1,5 @@
 using PyCall
+using DataStructures
 include("UAVpomdp.jl")
 
 @pyimport Tkinter as tk
@@ -185,6 +186,53 @@ function cost_of_naive(p::UAVpomdp)
     return total_cost
 end
 
+function get_neighbors(loc::Array{Int64,1}, visited_nodes::Array{Any,1}, map_size::Int64)
+    push!(visited_nodes, loc)
+    offsets = [[1,0],[-1,0],[0,1],[0,-1]]
+    neighbors = []
+
+    for offset in offsets
+        new_loc = [loc[1] + offset[1], loc[2] + offset[2]]
+        
+        if (new_loc in visited_nodes) || new_loc[1] <= 0 || new_loc[2] <= 0 || 
+            new_loc[1] > map_size || new_loc[2] > map_size
+            continue
+        end
+
+        push!(neighbors, new_loc)
+        push!(visited_nodes, new_loc)
+    end
+
+    return neighbors
+end
+
+function cost_of_oracle(p::UAVpomdp)
+    pq = DataStructures.PriorityQueue()
+    visited_nodes = []
+    pq[p.goal_coords] = (p.true_map[p.goal_coords[1],p.goal_coords[2]],0)
+
+    while true
+        tile = peek(pq)
+        tile_loc = tile[1]
+        tile_values = tile[2]
+
+        if tile_loc == p.start_coords
+            cost_of_nfz = p.reward_lambdas[4]*tile_values[1]
+            cost_of_dist = p.reward_lambdas[1]*tile_values[2]
+            #print(string(tile_values[1])*","*string(tile_values[2])*"\n")
+            return p.reward_lambdas[5] - cost_of_nfz - cost_of_dist
+        end
+
+        neighbors = get_neighbors(tile_loc, visited_nodes, p.map_size)
+        for neighbor in neighbors
+            new_values = (tile_values[1] + p.true_map[neighbor[1],neighbor[2]],tile_values[2]+1)
+            enqueue!(pq, neighbor, new_values)
+        end
+
+        dequeue!(pq)
+    end
+end
+
 function get_action(belief_state::BeliefState, prev_action::Int64, policy_type::String)
     if policy_type == "greedy_safe"
 
@@ -244,60 +292,3 @@ function get_action(belief_state::BeliefState, prev_action::Int64, policy_type::
         end
     end
 end
-
-# ###############
-# # Main script #
-# ###############
-
-# sim = SimulatorState(40,100)
-
-# rng = Base.Random.MersenneTwister(1237)
-# initial_map = initialize_map(40, 0.3, rng)
-# state = State([1,1], 0.0, initial_map)
-# visited_states = [(state.location[1],state.location[2])]
-# belief_state = initial_belief_state(pomdp)
-
-# first_update_simulator(sim, state)
-
-# total_reward = 0
-# action = Int(RIGHT)
-
-# n = 1
-# while true
-# 	update_simulator(sim, state, belief_state)
-    
-#     action = get_action(belief_state, action, "greedy_safe")
-
-#     new_state = generate_s(pomdp, state, action, rng)
-#     push!(visited_states,(new_state.location[1],new_state.location[2]))
-
-#     total_reward += reward(pomdp, state, action, new_state)
-
-#     obs = generate_o(pomdp, state, action, new_state, rng)
-#     belief_state = update_belief(pomdp, belief_state, action, obs)
-
-#     state = new_state
-
-#     if isterminal(pomdp, state)
-#         update_simulator(sim, state, belief_state)
-#         break
-#     end
-
-#     n += 1
-# end 
-
-    # if rand(rng,Float64) < 0.5
-    #     a = 5 
-    # else
-    #     if rand(rng,Float64) < 0.5
-    #         a = Int(DOWN)
-    #     else
-    #         a = Int(RIGHT)
-    #     end
-    # end
-
-# print("Final score:")
-# print(total_reward)
-# print("\n")
-
-# freeze_simulator(sim)
