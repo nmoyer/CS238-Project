@@ -317,8 +317,8 @@ end
 # For solving as BeliefMDP via MCTS #
 ###############################################
 struct MDPState
-    location::Tuple{Float64,Float64} # (row,column)
-    bel_battery_used::Tuple{Float64,Float64}
+    location::Array{Int64,1} # (row,column)
+    bel_battery_used::Array{Float64,1}
     bel_world_map::Array{Float64,2}
 end
 
@@ -333,7 +333,7 @@ type UAVBeliefMDP <: POMDPs.MDP{MDPState,Int64}
 end
 
 discount(::UAVBeliefMDP) = 1.0
-isterminal(p::UAVBeliefMDP,s::State) = (s.location == p.goal_coords)# || s.total_battery_used >= 100);
+isterminal(p::UAVBeliefMDP, s::MDPState) = (s.location == p.goal_coords)# || s.total_battery_used >= 100);
 actions(p::UAVBeliefMDP) = 1:NUM_SENSORS+NUM_MOVEMENTS
 n_actions(p::UAVBeliefMDP) = NUM_SENSORS+NUM_MOVEMENTS
 
@@ -345,6 +345,7 @@ function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwiste
     new_loc2 = s.location[2]
     new_bel_map = s.bel_world_map
     new_bel_batt_used = s.bel_battery_used
+    new_bel_world_map = s.bel_world_map
 
     exp_cost = 0.0
 
@@ -361,14 +362,14 @@ function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwiste
             new_loc1 += 1
         end
 
-        if new_loc1 < 1 || new_loc1 > map_size || new_loc2 < 1 || new_loc2 > map_size
+        if new_loc1 < 1 || new_loc1 > p.map_size || new_loc2 < 1 || new_loc2 > p.map_size
             # Just set to old location
             new_loc1 = s.location[1]
             new_loc2 = s.location[2]
         else
             # Expected cost of entering NFZ
             exp_cost += p.reward_lambdas[4]*s.bel_world_map[new_loc1,new_loc2]
-
+        end
 
         # Negative reward for movement
         exp_cost += p.reward_lambdas[1]
@@ -378,30 +379,29 @@ function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwiste
         goal_l1_dist = abs(goal_loc[1] - new_loc1) +abs(goal_loc[2] - new_loc2)
         exp_cost += p.reward_lambdas[2] * goal_l1_dist
 
-        if [new_loc1,new_loc2] == p.goal_coords:
+        if [new_loc1,new_loc2] == p.goal_coords
             exp_cost -= p.reward_lambdas[5]
         end
 
+        new_bel_world_map[new_loc1,new_loc2] = p.true_map[new_loc1,new_loc2]
     else
         # Sensor
         # Expected cost due to sensing is just the mean of Gaussian
-        sensor_mean_std = p.sensor_set[a].energySpec
-        new_bel_batt_used = (b.bel_battery_used[1] + sensor_mean_std[1] , sqrt(b.bel_battery_used[2]^2 + sensor_mean_std[2]^2)
+        new_bel_batt_used = [s.bel_battery_used[1] + p.sensor_set[a].energySpec[1] , sqrt(s.bel_battery_used[2]^2 + p.sensor_set[a].energySpec[2]^2)]
 
-        exp_cost += p.reward_lambdas[3] * sensor_mean_std[1]
+        exp_cost += p.reward_lambdas[3] * p.sensor_set[a].energySpec[1]
 
-        # TODO : NEed to implement
         new_bel_world_map = p.sensor_set[a].updateBelMapMDP(s.bel_world_map,s.location,rng)
+    end
 
-
-    next_sim_state = MDPState(new_loc,new_bel_batt_used,new_bel_world_map)
+    next_sim_state = MDPState([new_loc1,new_loc2],new_bel_batt_used,new_bel_world_map)
     sim_reward = -exp_cost
 
     return next_sim_state,sim_reward
+end
 
 
-
-function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64)
+function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwister)
 
     new_loc1 = s.location[1]
     new_loc2 = s.location[2]
@@ -423,18 +423,21 @@ function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64)
             new_loc1 += 1
         end
 
-        if new_loc1 < 1 || new_loc1 > map_size || new_loc2 < 1 || new_loc2 > map_size
+        if new_loc1 < 1 || new_loc1 > p.map_size || new_loc2 < 1 || new_loc2 > p.map_size
             # Just set to old location
             new_loc1 = s.location[1]
             new_loc2 = s.location[2]
         else
             # Cost of entering NFZ
             cost += p.reward_lambdas[4]*Int(p.true_map[new_loc1,new_loc2])
+        end
 
         cost += p.reward_lambdas[1]
+
+        new_bel_map[new_loc1,new_loc2] = p.true_map[new_loc1,new_loc2]
     else
         batt_consumed = p.sensor_set[a].consumeEnergy(rng)
-        new_bel_batt_used = (b.bel_battery_used[1] + sensor_mean_std[1] , sqrt(b.bel_battery_used[2]^2 + sensor_mean_std[2]^2)
+        new_bel_batt_used = [s.bel_battery_used[1] + p.sensor_set[a].energySpec[1], sqrt(s.bel_battery_used[2]^2 + p.sensor_set[a].energySpec[2]^2)]
 
         cost += p.reward_lambdas[3]*batt_consumed
 
@@ -443,7 +446,7 @@ function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64)
         for i = 1:p.map_size
             for j = 1:p.map_size
 
-                if sensor_obs_map[i,j] > 0.5
+                if sensor_obs_map[i,j][2] > 0.5
 
                     if sensor_obs_map[i,j][1] == true
                         top = sensor_obs_map[i,j][2]*s.bel_world_map[i,j]
@@ -457,11 +460,10 @@ function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64)
                 end
             end
         end
+    end
 
-    next_state = State(new_loc,new_bel_batt_used,new_bel_map)
+    next_state = MDPState([new_loc1,new_loc2],new_bel_batt_used,new_bel_map)
     reward = -cost
 
     return next_state, reward
-
-
 end

@@ -8,6 +8,16 @@ function sigmoid(z::Float64)
     return 1.0 ./ (1.0 .+ exp(-z))
 end
 
+function expected_prob_NFZ(prob_right::Float64, prob_NFZ::Float64) 
+    prob_obs_NFZ = prob_NFZ*prob_right + (1-prob_NFZ)*(1-prob_right)
+    prob_not_obs_NFZ = prob_right*(1-prob_NFZ) + (1-prob_right)*prob_NFZ
+
+    posterior_obs_NFZ = (prob_right*prob_NFZ)./prob_obs_NFZ
+    posterior_not_obs_NFZ = ((1-prob_right)*(1-prob_NFZ))./prob_not_obs_NFZ
+
+    return prob_obs_NFZ*posterior_obs_NFZ + prob_not_obs_NFZ*posterior_not_obs_NFZ
+end
+
 function delta_expected_confidence(prob_right::Float64, prob_NFZ::Float64) 
     prob_obs_NFZ = prob_NFZ*prob_right + (1-prob_NFZ)*(1-prob_right)
     prob_not_obs_NFZ = prob_right*(1-prob_NFZ) + (1-prob_right)*prob_NFZ
@@ -62,6 +72,7 @@ end
 type LineSensor <: Sensor
     sense::Function
     changeConfidence::Function
+    updateBelMapMDP::Function
     consumeEnergy::Function
     energyUsageLikelihood::Function
     energySpec::Tuple{Float64, Float64}
@@ -105,10 +116,26 @@ type LineSensor <: Sensor
             return delta_confidence
         end 
 
+        updateBelMapMDP = function (belief_map::Array{Float64,2},loc::Array{Int64,1},rng::MersenneTwister)
+            map_size = size(belief_map, 1)
+            confidence_stepsize = (LINE_SENSOR_MAX_CONF-LINE_SENSOR_MIN_CONF)/LINE_SENSOR_LENGTH
+            confidences = LINE_SENSOR_MAX_CONF:-confidence_stepsize:LINE_SENSOR_MIN_CONF
+
+            new_belief_map = deepcopy(belief_map)
+
+            for loc in generate_circle(loc, CIRCULAR_SENSOR_RADIUS, map_size)
+                row, col, d = loc
+                prob_right = confidences[d]
+                new_belief_map[row,col] = expected_prob_NFZ(prob_right, belief_map[row,col])
+            end
+
+            return new_belief_map
+        end
+
         consumeEnergy = function (rng::AbstractRNG)
             distribution = Normal(LINE_SENSOR_ENERGY_USE,
                                   LINE_SENSOR_ENERGY_SD)
-            return rand(distribution,rng)
+            return rand(distribution)#,rng)
         end
  
         energyUsageLikelihood = function (obs_battery_used::Float64)
@@ -118,7 +145,7 @@ type LineSensor <: Sensor
         end
 
         energySpec = (LINE_SENSOR_ENERGY_USE, LINE_SENSOR_ENERGY_SD)
-        return new(sense, changeConfidence, consumeEnergy, energyUsageLikelihood, energySpec)
+        return new(sense, changeConfidence, updateBelMapMDP, consumeEnergy, energyUsageLikelihood, energySpec)
     end
 end
 
@@ -169,6 +196,7 @@ end
 type CircularSensor <: Sensor
     sense::Function
     changeConfidence::Function
+    updateBelMapMDP::Function
     consumeEnergy::Function
     energyUsageLikelihood::Function
     energySpec::Tuple{Float64, Float64}
@@ -212,10 +240,26 @@ type CircularSensor <: Sensor
             return delta_confidence
         end 
 
+        updateBelMapMDP = function (belief_map::Array{Float64,2},loc::Array{Int64,1},rng::MersenneTwister)
+            map_size = size(belief_map, 1)
+            confidence_stepsize = (CIRCULAR_SENSOR_MAX_CONF-CIRCULAR_SENSOR_MIN_CONF)/CIRCULAR_SENSOR_RADIUS
+            confidences = CIRCULAR_SENSOR_MAX_CONF:-confidence_stepsize:CIRCULAR_SENSOR_MIN_CONF
+
+            new_belief_map = deepcopy(belief_map)
+
+            for loc in generate_circle(loc, CIRCULAR_SENSOR_RADIUS, map_size)
+                row, col, d = loc
+                prob_right = confidences[d]
+                new_belief_map[row,col] = expected_prob_NFZ(prob_right, belief_map[row,col])
+            end
+
+            return new_belief_map
+        end
+
         consumeEnergy = function (rng::AbstractRNG)
             distribution = Normal(CIRCULAR_SENSOR_ENERGY_USE,
                                   CIRCULAR_SENSOR_ENERGY_SD)
-            return rand(distribution,rng)
+            return rand(distribution)#,rng)
         end
  
         energyUsageLikelihood = function (obs_battery_used::Float64)
@@ -225,6 +269,6 @@ type CircularSensor <: Sensor
         end
 
         energySpec = (CIRCULAR_SENSOR_ENERGY_USE, CIRCULAR_SENSOR_ENERGY_SD)
-        return new(sense, changeConfidence, consumeEnergy, energyUsageLikelihood, energySpec)
+        return new(sense, changeConfidence, updateBelMapMDP, consumeEnergy, energyUsageLikelihood, energySpec)
     end
 end

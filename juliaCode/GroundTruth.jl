@@ -72,6 +72,25 @@ function first_update_simulator(sim::SimulatorState, initial_state::State)
 
 end
 
+function first_update_simulator(sim::SimulatorState, world_map::BitArray)
+
+    canvas = sim.canvas
+    canvas_true_grid = sim.canvas_true_grid    
+    map_size = size(canvas_true_grid,1)
+
+    for row = 1:map_size
+        for col = 1:map_size
+            if world_map[row,col]
+                tile_belief = 1.0
+            else
+                tile_belief = 0.0
+            end
+            canvas[:itemconfig](canvas_true_grid[row][col], fill=get_color(tile_belief))
+        end
+    end
+
+end
+
 function update_simulator(sim::SimulatorState, state::State, belief_state::BeliefState)
 
     canvas_true_grid = sim.canvas_true_grid
@@ -102,6 +121,31 @@ function update_simulator(sim::SimulatorState, state::State, belief_state::Belie
 
     tk_root[:update]()
     #sleep(.5)
+end
+
+function update_simulator(sim::SimulatorState, state::MDPState)
+
+    canvas_true_grid = sim.canvas_true_grid
+    canvas_belief_grid = sim.canvas_belief_grid
+    canvas = sim.canvas
+    tk_root = sim.tk_root
+    bel_world_map = state.bel_world_map
+    location = state.location
+
+    map_size = size(canvas_belief_grid,1)
+
+    for row = 1:map_size
+        for col = 1:map_size
+            tile_belief = bel_world_map[row,col]
+            canvas[:itemconfig](canvas_belief_grid[row][col], fill=get_color(tile_belief))
+        end
+    end
+
+    aircraft_row, aircraft_col = location
+    canvas[:itemconfig](canvas_true_grid[aircraft_row][aircraft_col], fill="blue")
+    canvas[:itemconfig](canvas_belief_grid[aircraft_row][aircraft_col], fill="blue")
+
+    tk_root[:update]()
 end
 
 function freeze_simulator(sim::SimulatorState)
