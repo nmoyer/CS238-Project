@@ -8,6 +8,24 @@ function sigmoid(z::Float64)
     return 1.0 ./ (1.0 .+ exp(-z))
 end
 
+function delta_expected_confidence(prob_right::Float64, prob_NFZ::Float64) 
+    prob_obs_NFZ = prob_NFZ*prob_right + (1-prob_NFZ)*(1-prob_right)
+    prob_not_obs_NFZ = prob_right*(1-prob_NFZ) + (1-prob_right)*prob_NFZ
+
+    if prob_NFZ < 0.01 || prob_NFZ > 0.99
+        return 0
+    end 
+
+    print("\nProb\n"*string(prob_obs_NFZ)*","*string(prob_not_obs_NFZ)*"\n")
+
+    change_if_obs_nfz = abs(((prob_right*prob_NFZ)./prob_obs_NFZ) - prob_NFZ)
+    change_if_not_obs_nfz = abs((((1-prob_right)*(1-prob_NFZ))./prob_not_obs_NFZ) - prob_NFZ)
+
+    print("Change\n"*string(change_if_obs_nfz)*","*string(change_if_not_obs_nfz)*"\n\n")
+
+    return prob_obs_NFZ*change_if_obs_nfz + prob_not_obs_NFZ*change_if_not_obs_nfz
+end
+
 abstract type Sensor
 end
 
@@ -43,6 +61,7 @@ end
 
 type LineSensor <: Sensor
     sense::Function
+    changeConfidence::Function
     consumeEnergy::Function
     energyUsageLikelihood::Function
     energySpec::Tuple{Float64, Float64}
@@ -71,6 +90,21 @@ type LineSensor <: Sensor
             return obs_map
         end
 
+        changeConfidence = function (belief_map::Array{Float64,2}, loc::Array{Int64,1})
+            map_size = size(belief_map, 1)
+            confidence_stepsize = (LINE_SENSOR_MAX_CONF-LINE_SENSOR_MIN_CONF)/LINE_SENSOR_LENGTH
+            confidences = LINE_SENSOR_MAX_CONF:-confidence_stepsize:LINE_SENSOR_MIN_CONF
+
+            delta_confidence = 0
+            for loc in generate_line(loc, LINE_SENSOR_LENGTH, direction, map_size)
+                row, col, d = loc
+                prob_right = confidences[d]       
+                delta_confidence += delta_expected_confidence(prob_right, belief_map[row,col]) 
+            end
+
+            return delta_confidence
+        end 
+
         consumeEnergy = function (rng::AbstractRNG)
             distribution = Normal(LINE_SENSOR_ENERGY_USE,
                                   LINE_SENSOR_ENERGY_SD)
@@ -84,14 +118,14 @@ type LineSensor <: Sensor
         end
 
         energySpec = (LINE_SENSOR_ENERGY_USE, LINE_SENSOR_ENERGY_SD)
-        return new(sense, consumeEnergy, energyUsageLikelihood, energySpec)
+        return new(sense, changeConfidence, consumeEnergy, energyUsageLikelihood, energySpec)
     end
 end
 
 const CIRCULAR_SENSOR_ENERGY_USE = 1
 const CIRCULAR_SENSOR_ENERGY_SD = 0.2
 const CIRCULAR_SENSOR_RADIUS = 4
-const CIRCULAR_SENSOR_MAX_CONF = 1.0
+const CIRCULAR_SENSOR_MAX_CONF = 0.9
 const CIRCULAR_SENSOR_MIN_CONF = 0.7
 
 const CIRCULAR_OFFSETS = Dict(1 => [[0, 1], [1, 0], [0, -1], [-1, 0]],
@@ -134,6 +168,7 @@ end
 
 type CircularSensor <: Sensor
     sense::Function
+    changeConfidence::Function
     consumeEnergy::Function
     energyUsageLikelihood::Function
     energySpec::Tuple{Float64, Float64}
@@ -162,6 +197,21 @@ type CircularSensor <: Sensor
             return obs_map
         end
  
+        changeConfidence = function (belief_map::Array{Float64,2}, loc::Array{Int64,1})
+            map_size = size(belief_map, 1)
+            confidence_stepsize = (CIRCULAR_SENSOR_MAX_CONF-CIRCULAR_SENSOR_MIN_CONF)/CIRCULAR_SENSOR_RADIUS
+            confidences = CIRCULAR_SENSOR_MAX_CONF:-confidence_stepsize:CIRCULAR_SENSOR_MIN_CONF
+
+            delta_confidence = 0
+            for loc in generate_circle(loc, CIRCULAR_SENSOR_RADIUS, map_size)
+                row, col, d = loc
+                prob_right = confidences[d]       
+                delta_confidence += delta_expected_confidence(prob_right, belief_map[row,col]) 
+            end
+
+            return delta_confidence
+        end 
+
         consumeEnergy = function (rng::AbstractRNG)
             distribution = Normal(CIRCULAR_SENSOR_ENERGY_USE,
                                   CIRCULAR_SENSOR_ENERGY_SD)
@@ -175,6 +225,6 @@ type CircularSensor <: Sensor
         end
 
         energySpec = (CIRCULAR_SENSOR_ENERGY_USE, CIRCULAR_SENSOR_ENERGY_SD)
-        return new(sense, consumeEnergy, energyUsageLikelihood, energySpec)
+        return new(sense, changeConfidence, consumeEnergy, energyUsageLikelihood, energySpec)
     end
 end

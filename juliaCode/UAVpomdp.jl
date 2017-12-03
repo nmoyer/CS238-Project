@@ -112,7 +112,7 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
     cost_comp1 = p.reward_lambdas[1] * manhattan_distance
 
     if manhattan_distance == 0 && a in MOVEMENTS
-        cost_comp1 = p.reward_lambdas[1]
+        cost_comp1 = p.reward_lambdas[4]
     end
 
     # Distance to goal heuristic
@@ -267,16 +267,7 @@ function update_belief(p::UAVpomdp, b::BeliefState, a::Int64, o::Observation)
             for j = 1 : p.map_size
 
                 if o.obs_world_map[i,j][2] > 0.5 #0.0
-                    # confval = 0.0
-                    # weightcoeff = 1.0 #TODO - This weights the new observation vs current
                     
-                    # # Do a weighted sum of old and new estimates
-                    # if o.obs_world_map[i,j][1] == true
-                    #     confval = (b.bel_world_map[i,j] + 1.0*weightcoeff)/(1.0 + o.obs_world_map[i,j][2]*weightcoeff)
-                    # else
-                    #     confval = (b.bel_world_map[i,j])/(1.0 + o.obs_world_map[i,j][2]*weightcoeff)
-                    # end
-
                     #perform a bayesian update
                     if o.obs_world_map[i,j][1] == true
                         top = o.obs_world_map[i,j][2]*b.bel_world_map[i,j]

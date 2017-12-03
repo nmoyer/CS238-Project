@@ -16,6 +16,10 @@ function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
     const oracle_cost = cost_of_oracle(pomdp)
     print(string(oracle_cost)*"\n")
 
+    # if oracle_cost < (10000-28)
+    #     return 0
+    # end
+
     policy = solve(solver, pomdp)
     belief_state = initial_belief_state(pomdp)
     state = State(START_LOC, START_BATTERY, initial_map)
@@ -26,15 +30,15 @@ function run_iteration(sim, solver, sensors, lambdas, seed, suppress_sim)
 
     total_reward = 0
     iteration = 0
-    while iteration < 200
+    while iteration < 1000000
         if !suppress_sim
             update_simulator(sim, state, belief_state)
         end
 
-        #print(state.location)
-        a = action(policy, belief_state) 
-        #print(iteration)
-        
+        #a = action(policy, belief_state) 
+        a = greedy_information_action(pomdp, belief_state)
+        print("TAKING ACTION"*string(a)*"\n")
+
         new_state = generate_s(pomdp, state, a, rng)
         total_reward += reward_no_heuristic(pomdp, state, a, new_state)
         obs = generate_o(pomdp, state, a, new_state, rng)
@@ -77,8 +81,8 @@ end
 # INPUT PARAMETERS #
 ####################
 
-const GRID_SIZE = 15
-const PERCENT_OBSTRUCT = 0.9
+const GRID_SIZE = 30
+const PERCENT_OBSTRUCT = 0.4
 
 const START_LOC = [1,1]
 const END_LOC = [GRID_SIZE, GRID_SIZE]
@@ -87,8 +91,8 @@ const START_BATTERY = 0.0
 const MOVEMENT_LAMBDA = 1.0
 const HEURISTIC_LAMBDA = 2.0
 const SENSOR_LAMBDA = 2.0
-const NFZ_LAMBDA = 20.0
-const SUCCESS_LAMBDA = 1000.0
+const NFZ_LAMBDA = 30.0
+const SUCCESS_LAMBDA = 10000.0
 
 const SUPPRESS_SIM = false
 
@@ -107,8 +111,8 @@ const MAX_DEPTH = 40
 
 solver = POMCPSolver(tree_queries=TREE_QUERIES,c=C, max_depth=MAX_DEPTH)
 
-const NUM_TRIALS = 1
-const START_SEED = 20
+const NUM_TRIALS = 100
+const START_SEED = 100
 
 #Base.Profile.init
 

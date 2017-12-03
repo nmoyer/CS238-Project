@@ -233,62 +233,166 @@ function cost_of_oracle(p::UAVpomdp)
     end
 end
 
-function get_action(belief_state::BeliefState, prev_action::Int64, policy_type::String)
-    if policy_type == "greedy_safe"
+function get_confident_neighbors(loc::Array{Int64,1}, belief_map::Array{Float64,2}, 
+                                 visited_nodes::Array{Any,1}, map_size::Int64)
 
-        if prev_action > 5
-            return 5
+    offsets = [[1,0],[-1,0],[0,1],[0,-1]]
+    neighbors = []
+
+    for offset in offsets
+        new_loc = [loc[1] + offset[1], loc[2] + offset[2]]
+
+        if (new_loc in visited_nodes) || new_loc[1] <= 0 || new_loc[2] <= 0 || 
+            new_loc[1] > map_size || new_loc[2] > map_size || 
+            belief_map[new_loc[1],new_loc[2]] == 0.5
+            continue
         end
 
-        map_size = size(belief_state.bel_world_map,1)
-        loc = belief_state.bel_location
-        moves = [(0,-1), (1,0), (0,1), (-1,0)]
+        push!(neighbors, [new_loc,loc])
+        push!(visited_nodes, new_loc)
+    end
 
-        min_bel = 1.0
-        min_move = (0,0)
-        for move in moves
-            row = loc[1]+move[1]
-            col = loc[2]+move[2]
+    if length(neighbors) > 0
+        push!(visited_nodes, loc)
+    end 
 
-            if (row <= 0) || (col <= 0) || (row > map_size) || (col > map_size)
-                continue
+    return neighbors
+end
+
+function get_neighbors_for_border(loc::Array{Int64,1}, map_size::Int64)
+    offsets = [[1,0],[-1,0],[0,1],[0,-1]]
+    neighbors = []
+
+    for offset in offsets
+        new_loc = [loc[1] + offset[1], loc[2] + offset[2]]
+        
+        if new_loc[1] <= 0 || new_loc[2] <= 0 || new_loc[1] > map_size || new_loc[2] > map_size
+            continue
+        end
+
+        push!(neighbors, new_loc)
+    end
+
+    return neighbors
+end
+
+function get_confidence_border(belief_map::Array{Float64,2}, visited_nodes::Array{Any,1}, map_size::Int64)
+    border = []
+    for row in 1:map_size
+        for col in 1:map_size
+            if belief_map[row,col] != 0.5
+                conf_neighbors = get_neighbors_for_border([row,col], map_size)
+
+                for neighbor in conf_neighbors
+                    if belief_map[neighbor[1],neighbor[2]] == 0.5
+                        push!(border, [row,col])
+                        break
+                    end
+                end
+            end 
+        end
+    end
+    return unique(border)
+end
+
+function optimal_action_given_information(p::UAVpomdp, belief_state::BeliefState)
+
+    print("\n\n TAKING MOVEMENT ACTION\n")
+    print(belief_state.bel_world_map)
+    pq = DataStructures.PriorityQueue()
+    visited_nodes = []
+    confidence_border = get_confidence_border(belief_state.bel_world_map, visited_nodes, p.map_size)
+
+    if belief_state.bel_world_map[p.goal_coords[1],p.goal_coords[2]] != .5
+        enqueue!(pq, [p.goal_coords, 0], (0,0))
+    end
+    print(string(confidence_border)*"\n")
+
+    for tile in confidence_border
+        l1_dist =  p.goal_coords[1]-tile[1] + p.goal_coords[2]-tile[2]
+        is_nfz = Int(belief_state.bel_world_map[tile[1],tile[2]] > 0.5)
+        push!(visited_nodes, tile)
+        enqueue!(pq, [tile, 0], (is_nfz, l1_dist))
+    end
+
+    while true
+        tile = peek(pq)
+        tile_loc = tile[1][1]
+        tile_came_from = tile[1][2]
+        tile_values = tile[2]
+
+        print(string(tile)*"\n")
+
+        if tile_loc == belief_state.bel_location
+            if tile_came_from == 0
+                return 5
+                if tile_loc[1] == p.map_size
+                    return Int(LEFT)
+                elseif tile_loc[2] == p.map_size
+                    return Int(DOWN)
+                else
+                    if rand() < 0.5
+                        return Int(LEFT)
+                    else
+                        return Int(RIGHT)
+                    end
+                end
             end
 
-            move_bel = belief_state.bel_world_map[row,col]
+            row_change = tile_came_from[1] - belief_state.bel_location[1]
+            col_change = tile_came_from[2] - belief_state.bel_location[2]
 
-            if (row, col) in visited_states
-                move_bel += 0.2
-            end
-
-            if move == (1,0) || move == (0,1)
-                move_bel -= 0.1
-            end
-
-            if move_bel < min_bel
-                min_bel = move_bel
-                min_move = move
+            if row_change == 0 && col_change == -1
+                return Int(LEFT)
+            elseif row_change == 0 && col_change == 1
+                return Int(RIGHT)
+            elseif row_change == 1 && col_change == 0
+                return Int(DOWN)
+            else
+                return Int(UP)
             end
         end
 
-        if min_move == (0,-1)
-            return Int(LEFT)
-        elseif min_move == (0,1)
-            return Int(RIGHT)
-        elseif min_move == (-1,0)
-            return Int(UP)
-        elseif min_move == (1,0)
-            return Int(DOWN)
-        else
-            print("No max move")
-            return Int(RIGHT)
+        neighbors = get_confident_neighbors(tile_loc, belief_state.bel_world_map, visited_nodes, p.map_size)
+        for neighbor in neighbors
+            neighbor_loc = neighbor[1]
+            is_nfz = Int(belief_state.bel_world_map[neighbor_loc[1],neighbor_loc[2]] > 0.5)
+            new_values = (tile_values[1] + is_nfz, tile_values[2]+1)
+            enqueue!(pq, neighbor, new_values)
         end
 
+        dequeue!(pq)
+    end
+end
+
+function choose_information_action(p::UAVpomdp, belief_state::BeliefState)
+
+    max_change = 0
+    best_sensor = 0
+
+    for sensor in SENSORS
+        change_confidence = p.sensor_set[sensor].changeConfidence(belief_state.bel_world_map, belief_state.bel_location)
+        print(string(sensor)*","*string(change_confidence)*"\n")
+
+        if change_confidence > max_change
+            max_change = change_confidence
+            best_sensor = sensor
+        end
+    end
+
+    if max_change < 4.0
+        return 0
     else
+        return best_sensor
+    end
+end
 
-        if prev_action == 6
-            return 9
-        else
-            return 6
-        end
+function greedy_information_action(p::UAVpomdp, belief_state::BeliefState)
+    action = choose_information_action(p, belief_state)
+
+    if action == 0
+        return optimal_action_given_information(p, belief_state)
+    else
+        return action
     end
 end
