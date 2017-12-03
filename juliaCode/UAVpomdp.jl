@@ -321,3 +321,156 @@ function rand(rng::AbstractRNG, b::BeliefState)
     return State(state_loc,state_bat,state_map)
 end
 
+
+###############################################
+# For solving as BeliefMDP via MCTS #
+###############################################
+struct MDPState
+    location::Tuple{Float64,Float64} # (row,column)
+    bel_battery_used::Tuple{Float64,Float64}
+    bel_world_map::Array{Float64,2}
+end
+
+
+type UAVBeliefMDP <: POMDPs.MDP{MDPState,Int64}
+    map_size::Int64
+    true_map::BitArray{2}
+    start_coords::Array{Int64,1}
+    goal_coords::Array{Int64,1}
+    sensor_set::Array{Sensor,1}
+    reward_lambdas::Array{Float64,1}
+end
+
+discount(::UAVBeliefMDP) = 1.0
+isterminal(p::UAVBeliefMDP,s::State) = (s.location == p.goal_coords)# || s.total_battery_used >= 100);
+actions(p::UAVBeliefMDP) = 1:NUM_SENSORS+NUM_MOVEMENTS
+n_actions(p::UAVBeliefMDP) = NUM_SENSORS+NUM_MOVEMENTS
+
+
+function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwister)
+
+    # First set the new location
+    new_loc1 = s.location[1]
+    new_loc2 = s.location[2]
+    new_bel_map = s.bel_world_map
+    new_bel_batt_used = s.bel_battery_used
+
+    exp_cost = 0.0
+
+    if a in MOVEMENTS
+        if a == Int(RIGHT)
+            # Increase column by one
+            new_loc2 += 1
+        elseif a == Int(LEFT)
+            # Decrease column by one
+            new_loc2 -= 1
+        elseif a == Int(UP)
+            new_loc1 -= 1
+        else
+            new_loc1 += 1
+        end
+
+        if new_loc1 < 1 || new_loc1 > map_size || new_loc2 < 1 || new_loc2 > map_size
+            # Just set to old location
+            new_loc1 = s.location[1]
+            new_loc2 = s.location[2]
+        else
+            # Expected cost of entering NFZ
+            exp_cost += p.reward_lambdas[4]*s.bel_world_map[new_loc1,new_loc2]
+
+
+        # Negative reward for movement
+        exp_cost += p.reward_lambdas[1]
+
+        # Negative reward for heuristic
+        goal_loc = p.goal_coords
+        goal_l1_dist = abs(goal_loc[1] - new_loc1) +abs(goal_loc[2] - new_loc2)
+        exp_cost += p.reward_lambdas[2] * goal_l1_dist
+
+        if [new_loc1,new_loc2] == p.goal_coords:
+            exp_cost -= p.reward_lambdas[5]
+        end
+
+    else
+        # Sensor
+        # Expected cost due to sensing is just the mean of Gaussian
+        sensor_mean_std = p.sensor_set[a].energySpec
+        new_bel_batt_used = (b.bel_battery_used[1] + sensor_mean_std[1] , sqrt(b.bel_battery_used[2]^2 + sensor_mean_std[2]^2)
+
+        exp_cost += p.reward_lambdas[3] * sensor_mean_std[1]
+
+        # TODO : NEed to implement
+        new_bel_world_map = p.sensor_set[a].updateBelMapMDP(s.bel_world_map,s.location,rng)
+
+
+    next_sim_state = MDPState(new_loc,new_bel_batt_used,new_bel_world_map)
+    sim_reward = -exp_cost
+
+    return next_sim_state,sim_reward
+
+
+
+function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64)
+
+    new_loc1 = s.location[1]
+    new_loc2 = s.location[2]
+    new_bel_map = s.bel_world_map
+    new_bel_batt_used = s.bel_battery_used
+
+    cost = 0.0
+
+    if a in MOVEMENTS
+        if a == Int(RIGHT)
+            # Increase column by one
+            new_loc2 += 1
+        elseif a == Int(LEFT)
+            # Decrease column by one
+            new_loc2 -= 1
+        elseif a == Int(UP)
+            new_loc1 -= 1
+        else
+            new_loc1 += 1
+        end
+
+        if new_loc1 < 1 || new_loc1 > map_size || new_loc2 < 1 || new_loc2 > map_size
+            # Just set to old location
+            new_loc1 = s.location[1]
+            new_loc2 = s.location[2]
+        else
+            # Cost of entering NFZ
+            cost += p.reward_lambdas[4]*Int(p.true_map[new_loc1,new_loc2])
+
+        cost += p.reward_lambdas[1]
+    else
+        batt_consumed = p.sensor_set[a].consumeEnergy(rng)
+        new_bel_batt_used = (b.bel_battery_used[1] + sensor_mean_std[1] , sqrt(b.bel_battery_used[2]^2 + sensor_mean_std[2]^2)
+
+        cost += p.reward_lambdas[3]*batt_consumed
+
+        sensor_obs_map = p.sensor_set[a].sense(p.true_map,s.location,rng)
+
+        for i = 1:p.map_size
+            for j = 1:p.map_size
+
+                if sensor_obs_map[i,j] > 0.5
+
+                    if sensor_obs_map[i,j][1] == true
+                        top = sensor_obs_map[i,j][2]*s.bel_world_map[i,j]
+                        bottom = top + (1.0 - sensor_obs_map[i,j][2])*(1.0 - s.bel_world_map[i,j])
+                        new_bel_map[i,j] = top ./ bottom
+                    else
+                        top = (1-sensor_obs_map[i,j][2])*s.bel_world_map[i,j]
+                        bottom = top + sensor_obs_map[i,j][2]*(1.0 - s.bel_world_map[i,j])
+                        new_bel_map[i,j] = top ./ bottom
+                    end
+                end
+            end
+        end
+
+    next_state = State(new_loc,new_bel_batt_used,new_bel_map)
+    reward = -cost
+
+    return next_state, reward
+
+
+end
