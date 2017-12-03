@@ -72,7 +72,9 @@ type LineSensor <: Sensor
         end
 
         consumeEnergy = function (rng::AbstractRNG)
-            return LINE_SENSOR_ENERGY_USE
+            distribution = Normal(LINE_SENSOR_ENERGY_USE,
+                                  LINE_SENSOR_ENERGY_SD)
+            return rand(distribution,rng)
         end
  
         energyUsageLikelihood = function (obs_battery_used::Float64)
@@ -161,7 +163,9 @@ type CircularSensor <: Sensor
         end
  
         consumeEnergy = function (rng::AbstractRNG)
-            return CIRCULAR_SENSOR_ENERGY_USE
+            distribution = Normal(CIRCULAR_SENSOR_ENERGY_USE,
+                                  CIRCULAR_SENSOR_ENERGY_SD)
+            return rand(distribution,rng)
         end
  
         energyUsageLikelihood = function (obs_battery_used::Float64)
