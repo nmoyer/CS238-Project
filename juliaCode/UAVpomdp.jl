@@ -45,7 +45,7 @@ const MOVEMENTS = NUM_SENSORS+1:NUM_SENSORS+NUM_MOVEMENTS
 @enum MOVEMENT_STRING RIGHT=NUM_SENSORS+1 LEFT=NUM_SENSORS+2 UP=NUM_SENSORS+3 DOWN=NUM_SENSORS+4
 
 # The observation from a state is just the map of th
-function generate_o(p::UAVpomdp, s::State, a::Int64, sp::State, rng::MersenneTwister)
+function generate_o(p::UAVpomdp, s::State, a::Int64, sp::State, rng::AbstractRNG)
     
     obs_loc = sp.location
     obs_batt_used = sp.total_battery_used - s.total_battery_used
@@ -64,7 +64,7 @@ function generate_o(p::UAVpomdp, s::State, a::Int64, sp::State, rng::MersenneTwi
     return Observation(obs_loc,obs_batt_used,obs_map)
 end
 
-function generate_s(p::UAVpomdp, s::State, a::Int64, rng::MersenneTwister)
+function generate_s(p::UAVpomdp, s::State, a::Int64, rng::AbstractRNG)
 
     map_size = size(s.world_map,1)
     # Begin by copying over values
@@ -93,8 +93,6 @@ function generate_s(p::UAVpomdp, s::State, a::Int64, rng::MersenneTwister)
     else
         # The only change is to battery
         new_batt += p.sensor_set[a].consumeEnergy(rng)
-
-        # Make changes in bel_map
         
     end
 
@@ -139,6 +137,7 @@ function reward(p::UAVpomdp, s::State, a::Int64, sp::State)
 
     return reward
 end
+
 
 function reward_no_heuristic(p::UAVpomdp, s::State, a::Int64, sp::State)
 
@@ -338,7 +337,7 @@ actions(p::UAVBeliefMDP) = 1:NUM_SENSORS+NUM_MOVEMENTS
 n_actions(p::UAVBeliefMDP) = NUM_SENSORS+NUM_MOVEMENTS
 
 
-function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwister)
+function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::AbstractRNG)
 
     # First set the new location
     new_loc1 = s.location[1]
@@ -401,7 +400,7 @@ function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwiste
 end
 
 
-function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwister)
+function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::AbstractRNG)
 
     new_loc1 = s.location[1]
     new_loc2 = s.location[2]
@@ -466,4 +465,96 @@ function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::Mer
     reward = -cost
 
     return next_state, reward
+end
+
+
+
+
+#####################################
+# generate_sor for DESPOT
+
+function generate_sor(p::UAVpomdp, s::State, a::Int64, rng::AbstractRNG)
+
+    # State Part
+
+    map_size = size(s.world_map,1)
+    # Begin by copying over values
+    new_loc = [s.location[1], s.location[2]]
+    new_batt = s.total_battery_used
+    new_map = s.world_map
+
+    if a in MOVEMENTS
+        if a == Int(RIGHT)
+            # Increase column by one
+            new_loc[2] += 1
+        elseif a == Int(LEFT)
+            # Decrease column by one
+            new_loc[2] -= 1
+        elseif a == Int(UP)
+            new_loc[1] -= 1
+        else
+            new_loc[1] += 1
+        end
+
+        if new_loc[1] < 1 || new_loc[1] > map_size || new_loc[2] < 1 || new_loc[2] > map_size
+            # Just set to old location
+            new_loc = [s.location[1], s.location[2]]
+        end
+        new_batt += 1
+    else
+        # The only change is to battery
+        new_batt += p.sensor_set[a].consumeEnergy(rng)
+        
+    end
+
+    sp = State(new_loc,new_batt,new_map)
+
+    # Observation part
+    obs_loc = sp.location
+    obs_batt_used = sp.total_battery_used - s.total_battery_used
+
+    # Should have an enum set for movements and sensors
+    if a in MOVEMENTS
+        # Just observe current cell with full conf
+        obs_map = Array{Tuple{Bool,Float64}}(p.map_size, p.map_size)
+        fill!(obs_map,(false,0.5))
+
+        obs_map[sp.location[1],sp.location[2]] = ( sp.world_map[sp.location[1],sp.location[2]], 1.0 )
+    else
+        obs_map = p.sensor_set[a].sense(sp.world_map, sp.location, rng)
+    end
+
+    obs = Observation(obs_loc,obs_batt_used,obs_map)
+
+    # Now get reward
+    manhattan_distance = abs(s.location[1] - sp.location[1]) + abs(s.location[2]-sp.location[2])
+    cost_comp1 = p.reward_lambdas[1] * manhattan_distance
+
+    if manhattan_distance == 0 && a in MOVEMENTS
+        cost_comp1 = p.reward_lambdas[4]
+    end
+
+    # Distance to goal heuristic
+    goal_loc = p.goal_coords
+    goal_l1_dist = abs(goal_loc[1] - sp.location[1]) + abs(goal_loc[2]-sp.location[2])
+    
+    cost_comp1 += p.reward_lambdas[2] * goal_l1_dist
+
+    # Component 2 - one-step energy usage
+    # 0 if no sensing action done
+    cost_comp2 = p.reward_lambdas[3] * (sp.total_battery_used - s.total_battery_used)
+
+
+    # Component 3 - If in no-fly-zone
+    # true means no-fly-zone : additional cost
+    cost_comp3 = p.reward_lambdas[4] * Int(sp.world_map[sp.location[1],sp.location[2]])
+
+
+    reward = -(cost_comp1 + cost_comp2 + cost_comp3)
+
+    if isterminal(p, sp)
+        reward += p.reward_lambdas[5]
+    end
+
+    return sp,obs,reward
 end

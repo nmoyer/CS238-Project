@@ -1,4 +1,5 @@
 using MCTS, BasicPOMCP#, POMCPOW
+using ARDESPOT
 using Base.Profile
 include("GroundTruth.jl")
 
@@ -7,14 +8,18 @@ include("GroundTruth.jl")
 function run_iteration_pomdp(sim, sensors, lambdas, seed, suppress_sim)
 
     rng = Base.Random.MersenneTwister(seed)
-    solver = POMCPSolver(tree_queries=TREE_QUERIES,c=C, max_depth=MAX_DEPTH, rng=rng)
+    #solver = POMCPSolver(tree_queries=TREE_QUERIES,c=C, max_depth=MAX_DEPTH, rng=rng)
+
+    despot_depth = 30
+    despot_bounds = (-lambdas[4]*despot_depth,lambdas[5])
+    solver = DESPOTSolver(max_trials=100,D=despot_depth,bounds=despot_bounds) 
 
     const initial_map = initialize_map(GRID_SIZE, PERCENT_OBSTRUCT, rng)
     const pomdp = UAVpomdp(GRID_SIZE, initial_map, START_LOC, END_LOC, sensors, lambdas)
     
     const naive_cost = cost_of_naive(pomdp)
-    const oracle_cost = cost_of_oracle(pomdp)
-    print(string(oracle_cost)*"\n")
+    #const oracle_cost = cost_of_oracle(pomdp)
+    #print(string(oracle_cost)*"\n")
 
     # if oracle_cost < (10000-28)
     #     return 0
@@ -35,9 +40,9 @@ function run_iteration_pomdp(sim, sensors, lambdas, seed, suppress_sim)
             update_simulator(sim, state, belief_state)
         end
 
-        #a = action(policy, belief_state) 
-        a = greedy_information_action(pomdp, belief_state)
-        print("TAKING ACTION"*string(a)*"\n")
+        a = action(policy, belief_state) 
+        #a = greedy_information_action(pomdp, belief_state)
+        #print("TAKING ACTION"*string(a)*"\n")
 
         new_state = generate_s(pomdp, state, a, rng)
         total_reward += reward_no_heuristic(pomdp, state, a, new_state)
@@ -117,7 +122,7 @@ function run_trials(sim, sensors, lambdas, num_trials, suppress_sim, start_seed)
 
     all_rewards = 0.0
     for seed in start_seed:start_seed + (num_trials-1)
-        all_rewards += @time run_iteration_mdp(sim, sensors, lambdas, seed, suppress_sim)
+        all_rewards += @time run_iteration_pomdp(sim, sensors, lambdas, seed, suppress_sim)
     end
     average_reward = all_rewards ./ num_trials
 
@@ -135,7 +140,7 @@ end
 ####################
 
 const GRID_SIZE = 15
-const PERCENT_OBSTRUCT = 0.4
+const PERCENT_OBSTRUCT = 0.3
 
 const START_LOC = [1,1]
 const END_LOC = [GRID_SIZE, GRID_SIZE]
@@ -163,7 +168,7 @@ const C = 1.0
 const MAX_DEPTH = 40
 
 const NUM_TRIALS = 100
-const START_SEED = 105
+const START_SEED = 325
 
 #Base.Profile.init
 

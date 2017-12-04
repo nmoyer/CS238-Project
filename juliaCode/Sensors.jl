@@ -78,7 +78,7 @@ type LineSensor <: Sensor
     energySpec::Tuple{Float64, Float64}
 
     function LineSensor(direction::Array{Int64,1})
-        sense = function (world_map::BitArray, loc::Array{Int64,1}, rng::MersenneTwister)
+        sense = function (world_map::BitArray, loc::Array{Int64,1}, rng::AbstractRNG)
             map_size = size(world_map, 1)
             confidence_stepsize = (LINE_SENSOR_MAX_CONF-LINE_SENSOR_MIN_CONF)/LINE_SENSOR_LENGTH
             confidences = LINE_SENSOR_MAX_CONF:-confidence_stepsize:LINE_SENSOR_MIN_CONF
@@ -116,7 +116,7 @@ type LineSensor <: Sensor
             return delta_confidence
         end 
 
-        updateBelMapMDP = function (belief_map::Array{Float64,2},loc::Array{Int64,1},rng::MersenneTwister)
+        updateBelMapMDP = function (belief_map::Array{Float64,2},loc::Array{Int64,1},rng::AbstractRNG)
             map_size = size(belief_map, 1)
             confidence_stepsize = (LINE_SENSOR_MAX_CONF-LINE_SENSOR_MIN_CONF)/LINE_SENSOR_LENGTH
             confidences = LINE_SENSOR_MAX_CONF:-confidence_stepsize:LINE_SENSOR_MIN_CONF
@@ -202,7 +202,7 @@ type CircularSensor <: Sensor
     energySpec::Tuple{Float64, Float64}
 
     function CircularSensor()
-        sense = function (world_map::BitArray, loc::Array{Int64,1}, rng::MersenneTwister)
+        sense = function (world_map::BitArray, loc::Array{Int64,1}, rng::AbstractRNG)
             map_size = size(world_map, 1)
             confidence_stepsize = (CIRCULAR_SENSOR_MAX_CONF-CIRCULAR_SENSOR_MIN_CONF)/CIRCULAR_SENSOR_RADIUS
             confidences = CIRCULAR_SENSOR_MAX_CONF:-confidence_stepsize:CIRCULAR_SENSOR_MIN_CONF
@@ -240,7 +240,7 @@ type CircularSensor <: Sensor
             return delta_confidence
         end 
 
-        updateBelMapMDP = function (belief_map::Array{Float64,2},loc::Array{Int64,1},rng::MersenneTwister)
+        updateBelMapMDP = function (belief_map::Array{Float64,2},loc::Array{Int64,1},rng::AbstractRNG)
             map_size = size(belief_map, 1)
             confidence_stepsize = (CIRCULAR_SENSOR_MAX_CONF-CIRCULAR_SENSOR_MIN_CONF)/CIRCULAR_SENSOR_RADIUS
             confidences = CIRCULAR_SENSOR_MAX_CONF:-confidence_stepsize:CIRCULAR_SENSOR_MIN_CONF

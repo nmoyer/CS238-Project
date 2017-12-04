@@ -159,7 +159,7 @@ end
 # Grid world functions #
 ########################
 
-function make_cluster(world_map::BitArray{2}, rng::MersenneTwister)
+function make_cluster(world_map::BitArray{2}, rng::AbstractRNG)
     const cluster_height = 1
     const cluster_width = 1
 
@@ -186,7 +186,7 @@ function perc_obstruct(world_map::BitArray{2})
     return cum_sum/(size(world_map,1)*size(world_map,2))
 end
 
-function initialize_map(map_size::Int64, desired_perc::Float64, rng::MersenneTwister)
+function initialize_map(map_size::Int64, desired_perc::Float64, rng::AbstractRNG)
     world_map = falses(map_size,map_size)
     while perc_obstruct(world_map) < desired_perc
         make_cluster(world_map, rng)
