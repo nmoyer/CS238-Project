@@ -140,7 +140,7 @@ function run_trials_with_alg(sensors, lambdas, NUM_TRIALS, SUPPRESS_SIM, START_S
             print("Avg reward - "*string(avg_cost)"\n")
             fname = alg*"-"*string(grid_size)*"-"*string(percent_obstruct)*".txt"
             open(fname,"w") do f
-                write(f,"$avg_cost, $std_dev_cost, $oracle_cost $n_no_sols")
+                write(f,"$avg_cost, $std_dev_cost, $oracle_cost, $n_no_sols")
             end
         end
     end
