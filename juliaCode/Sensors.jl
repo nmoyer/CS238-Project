@@ -26,12 +26,12 @@ function delta_expected_confidence(prob_right::Float64, prob_NFZ::Float64)
         return 0
     end 
 
-    print("\nProb\n"*string(prob_obs_NFZ)*","*string(prob_not_obs_NFZ)*"\n")
+    #print("\nProb\n"*string(prob_obs_NFZ)*","*string(prob_not_obs_NFZ)*"\n")
 
     change_if_obs_nfz = abs(((prob_right*prob_NFZ)./prob_obs_NFZ) - prob_NFZ)
     change_if_not_obs_nfz = abs((((1-prob_right)*(1-prob_NFZ))./prob_not_obs_NFZ) - prob_NFZ)
 
-    print("Change\n"*string(change_if_obs_nfz)*","*string(change_if_not_obs_nfz)*"\n\n")
+    #print("Change\n"*string(change_if_obs_nfz)*","*string(change_if_not_obs_nfz)*"\n\n")
 
     return prob_obs_NFZ*change_if_obs_nfz + prob_not_obs_NFZ*change_if_not_obs_nfz
 end
@@ -123,10 +123,23 @@ type LineSensor <: Sensor
 
             new_belief_map = deepcopy(belief_map)
 
-            for loc in generate_circle(loc, CIRCULAR_SENSOR_RADIUS, map_size)
+            for loc in generate_line(loc, LINE_SENSOR_LENGTH, direction, map_size)
                 row, col, d = loc
                 prob_right = confidences[d]
-                new_belief_map[row,col] = expected_prob_NFZ(prob_right, belief_map[row,col])
+                prob_NFZ = belief_map[row,col]
+
+                prob_obs_NFZ = prob_NFZ*prob_right + (1.0 - prob_NFZ)*(1.0 - prob_right)
+                #print(string(prob_obs_NFZ)*"\n")
+
+                if rand(rng,Float64) < prob_obs_NFZ
+                    top = prob_right*prob_NFZ
+                    bottom = top + (1.0 - prob_right)*(1.0 - prob_NFZ)
+                    new_belief_map[row,col] = top ./ bottom
+                else
+                    top = (1.0 - prob_right)*prob_NFZ
+                    bottom = top + prob_right*(1.0 - prob_NFZ)
+                    new_belief_map[row,col] = top ./ bottom 
+                end
             end
 
             return new_belief_map
@@ -149,7 +162,7 @@ type LineSensor <: Sensor
     end
 end
 
-const CIRCULAR_SENSOR_ENERGY_USE = 1
+const CIRCULAR_SENSOR_ENERGY_USE = 4
 const CIRCULAR_SENSOR_ENERGY_SD = 0.2
 const CIRCULAR_SENSOR_RADIUS = 4
 const CIRCULAR_SENSOR_MAX_CONF = 0.9
@@ -250,9 +263,21 @@ type CircularSensor <: Sensor
             for loc in generate_circle(loc, CIRCULAR_SENSOR_RADIUS, map_size)
                 row, col, d = loc
                 prob_right = confidences[d]
-                new_belief_map[row,col] = expected_prob_NFZ(prob_right, belief_map[row,col])
-            end
+                prob_NFZ = belief_map[row,col]
 
+                prob_obs_NFZ = prob_NFZ*prob_right + (1.0 - prob_NFZ)*(1.0 - prob_right)
+
+                if rand(rng,Float64) < prob_obs_NFZ
+                    top = prob_right*prob_NFZ
+                    bottom = top + (1.0 - prob_right)*(1.0 - prob_NFZ)
+                    new_belief_map[row,col] = top ./ bottom
+                else
+                    top = (1.0 - prob_right)*prob_NFZ
+                    bottom = top + prob_right*(1.0 - prob_NFZ)
+                    new_belief_map[row,col] = top ./ bottom 
+                end
+            end
+ 
             return new_belief_map
         end
 

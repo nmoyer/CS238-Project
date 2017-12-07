@@ -343,7 +343,7 @@ function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwiste
     # First set the new location
     new_loc1 = s.location[1]
     new_loc2 = s.location[2]
-    new_bel_map = s.bel_world_map
+    new_bel_map = deepcopy(s.bel_world_map)
     new_bel_batt_used = s.bel_battery_used
     new_bel_world_map = s.bel_world_map
 
@@ -366,6 +366,7 @@ function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwiste
             # Just set to old location
             new_loc1 = s.location[1]
             new_loc2 = s.location[2]
+            exp_cost += p.reward_lambdas[4]
         else
             # Expected cost of entering NFZ
             exp_cost += p.reward_lambdas[4]*s.bel_world_map[new_loc1,new_loc2]
@@ -383,7 +384,7 @@ function generate_sr(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::MersenneTwiste
             exp_cost -= p.reward_lambdas[5]
         end
 
-        new_bel_world_map[new_loc1,new_loc2] = p.true_map[new_loc1,new_loc2]
+        #new_bel_world_map[new_loc1,new_loc2] = p.true_map[new_loc1,new_loc2]
     else
         # Sensor
         # Expected cost due to sensing is just the mean of Gaussian
@@ -433,6 +434,10 @@ function next_state_reward_true(p::UAVBeliefMDP, s::MDPState, a::Int64, rng::Mer
         end
 
         cost += p.reward_lambdas[1]
+
+        if [new_loc1,new_loc2] == p.goal_coords
+            cost -= p.reward_lambdas[5]
+        end
 
         new_bel_map[new_loc1,new_loc2] = p.true_map[new_loc1,new_loc2]
     else

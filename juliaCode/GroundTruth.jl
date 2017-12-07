@@ -250,26 +250,27 @@ function get_neighbors(loc::Array{Int64,1}, visited_nodes::Array{Any,1}, map_siz
     return neighbors
 end
 
-function cost_of_oracle(p::UAVpomdp)
+function cost_of_oracle(true_map::BitArray, start_coords::Array{Int64,1}, 
+                        goal_coords::Array{Int64,1}, reward_lambdas::Array{Float64,1})
     pq = DataStructures.PriorityQueue()
     visited_nodes = []
-    pq[p.goal_coords] = (p.true_map[p.goal_coords[1],p.goal_coords[2]],0)
+    pq[goal_coords] = (true_map[goal_coords[1],goal_coords[2]],0)
 
     while true
         tile = peek(pq)
         tile_loc = tile[1]
         tile_values = tile[2]
 
-        if tile_loc == p.start_coords
-            cost_of_nfz = p.reward_lambdas[4]*tile_values[1]
-            cost_of_dist = p.reward_lambdas[1]*tile_values[2]
+        if tile_loc == start_coords
+            cost_of_nfz = reward_lambdas[4]*tile_values[1]
+            cost_of_dist = reward_lambdas[1]*tile_values[2]
             #print(string(tile_values[1])*","*string(tile_values[2])*"\n")
-            return p.reward_lambdas[5] - cost_of_nfz - cost_of_dist
+            return reward_lambdas[5] - cost_of_nfz - cost_of_dist
         end
 
-        neighbors = get_neighbors(tile_loc, visited_nodes, p.map_size)
+        neighbors = get_neighbors(tile_loc, visited_nodes, size(true_map,1))
         for neighbor in neighbors
-            new_values = (tile_values[1] + p.true_map[neighbor[1],neighbor[2]],tile_values[2]+1)
+            new_values = (tile_values[1] + true_map[neighbor[1],neighbor[2]],tile_values[2]+1)
             enqueue!(pq, neighbor, new_values)
         end
 
@@ -341,16 +342,16 @@ end
 
 function optimal_action_given_information(p::UAVpomdp, belief_state::BeliefState)
 
-    print("\n\n TAKING MOVEMENT ACTION\n")
-    print(belief_state.bel_world_map)
+    #print("\n\n TAKING MOVEMENT ACTION\n")
+    #print(belief_state.bel_world_map)
     pq = DataStructures.PriorityQueue()
     visited_nodes = []
     confidence_border = get_confidence_border(belief_state.bel_world_map, visited_nodes, p.map_size)
 
-    if belief_state.bel_world_map[p.goal_coords[1],p.goal_coords[2]] != .5
+    if (belief_state.bel_world_map[p.goal_coords[1],p.goal_coords[2]] != .5) && ~(p.goal_coords in confidence_border)
         enqueue!(pq, [p.goal_coords, 0], (0,0))
     end
-    print(string(confidence_border)*"\n")
+    #print(string(confidence_border)*"\n")
 
     for tile in confidence_border
         l1_dist =  p.goal_coords[1]-tile[1] + p.goal_coords[2]-tile[2]
@@ -365,7 +366,7 @@ function optimal_action_given_information(p::UAVpomdp, belief_state::BeliefState
         tile_came_from = tile[1][2]
         tile_values = tile[2]
 
-        print(string(tile)*"\n")
+        #print(string(tile)*"\n")
 
         if tile_loc == belief_state.bel_location
             if tile_came_from == 0
@@ -416,7 +417,7 @@ function choose_information_action(p::UAVpomdp, belief_state::BeliefState)
 
     for sensor in SENSORS
         change_confidence = p.sensor_set[sensor].changeConfidence(belief_state.bel_world_map, belief_state.bel_location)
-        print(string(sensor)*","*string(change_confidence)*"\n")
+        #print(string(sensor)*","*string(change_confidence)*"\n")
 
         if change_confidence > max_change
             max_change = change_confidence
