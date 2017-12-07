@@ -265,7 +265,7 @@ function cost_of_oracle(true_map::BitArray, start_coords::Array{Int64,1},
             cost_of_nfz = reward_lambdas[4]*tile_values[1]
             cost_of_dist = reward_lambdas[1]*tile_values[2]
             #print(string(tile_values[1])*","*string(tile_values[2])*"\n")
-            return reward_lambdas[5] - cost_of_nfz - cost_of_dist
+            return tile_values[1], reward_lambdas[5] - cost_of_nfz - cost_of_dist
         end
 
         neighbors = get_neighbors(tile_loc, visited_nodes, size(true_map,1))
