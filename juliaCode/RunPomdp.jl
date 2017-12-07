@@ -172,7 +172,7 @@ const TREE_QUERIES = 1000
 const C = 1.0
 const MAX_DEPTH = 40
 
-const NUM_TRIALS = 1
+const NUM_TRIALS = 20
 const START_SEED = 300
 
 for algorithm in ["mdp","pomcp","greedy"]
