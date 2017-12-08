@@ -1,4 +1,4 @@
-using MCTS, BasicPOMCP#, POMCPOW
+using MCTS, BasicPOMCP, ARDESPOT#, POMCPOW
 using Base.Profile
 include("GroundTruth.jl")
 
@@ -21,7 +21,15 @@ function run_iteration_alg(sim, sensors, lambdas, rng, initial_map, alg, grid_si
         belief_state = initial_belief_state(pomdp)
         state = State(START_LOC, START_BATTERY, initial_map)
 
-    else 
+    elseif alg == "ARDESPOT"
+
+        const solver = DESPOTSolver(bounds=(-15.0, 0.0))
+        const pomdp = UAVpomdp(grid_size, initial_map, START_LOC, [grid_size, grid_size], sensors, lambdas)
+        policy = solve(solver, pomdp)
+        belief_state = initial_belief_state(pomdp)
+        state = State(START_LOC, START_BATTERY, initial_map)
+
+    else
 
         const pomdp = UAVpomdp(grid_size, initial_map, START_LOC, [grid_size, grid_size], sensors, lambdas)
         belief_state = initial_belief_state(pomdp)
@@ -53,7 +61,7 @@ function run_iteration_alg(sim, sensors, lambdas, rng, initial_map, alg, grid_si
             a = greedy_information_action(pomdp, belief_state)
         end
 
-        if alg == "mdp" 
+        if alg == "mdp"
             new_state, reward = next_state_reward_true(mdp, state, a, rng)
         else
             new_state = generate_s(pomdp, state, a, rng)
@@ -61,7 +69,7 @@ function run_iteration_alg(sim, sensors, lambdas, rng, initial_map, alg, grid_si
             obs = generate_o(pomdp, state, a, new_state, rng)
             belief_state = update_belief(pomdp, belief_state, a, obs)
         end
-        
+
         total_reward += reward
         state = new_state
 
@@ -87,7 +95,7 @@ function run_iteration_alg(sim, sensors, lambdas, rng, initial_map, alg, grid_si
     end
 
     return total_reward,solved
-end 
+end
 
 
 function run_trials(sim, sensors, lambdas, num_trials, suppress_sim, start_seed, alg, grid_size, percent_obstruct)
@@ -160,22 +168,22 @@ const START_BATTERY = 0.0
 const MOVEMENT_LAMBDA = 1.0
 const HEURISTIC_LAMBDA = 1.0
 const SENSOR_LAMBDA = 1.0
-const NFZ_LAMBDA = 20
+#const NFZ_LAMBDA = 20
 const SUCCESS_LAMBDA = 1000.0
 
 const SUPPRESS_SIM = true
 
 const sensors = [LineSensor([0,1]),LineSensor([1,0]),LineSensor([0,-1]),LineSensor([-1,0]),CircularSensor()]
-const lambdas = [MOVEMENT_LAMBDA, HEURISTIC_LAMBDA, SENSOR_LAMBDA, NFZ_LAMBDA, SUCCESS_LAMBDA]
+const lambdas = [MOVEMENT_LAMBDA, HEURISTIC_LAMBDA, SENSOR_LAMBDA, 20, SUCCESS_LAMBDA]
 
 const TREE_QUERIES = 1000
 const C = 1.0
 const MAX_DEPTH = 40
 
-const NUM_TRIALS = 20
+const NUM_TRIALS = 2
 const START_SEED = 300
 
-for algorithm in ["mdp","pomcp","greedy"]
+for algorithm in ["ARDESPOT", "mdp","pomcp","greedy"]
     run_trials_with_alg(sensors, lambdas, NUM_TRIALS, SUPPRESS_SIM, START_SEED, algorithm)
 end
 
